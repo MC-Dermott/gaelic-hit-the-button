@@ -173,6 +173,11 @@ const VERBS = [
     ['past','ind','bha'], ['past','dep','robh'],
     ['fut','ind','bidh'], ['fut','dep','bi'],
     ['cond','ind','bhiodh'], ['cond','dep','biodh'] ] },
+  { gd: 'beir', en: 'catch', f: [
+    ['vn','both','breith'], ['imp','both','beir'],
+    ['past','ind','rug'], ['past','dep','rug','do'],
+    ['fut','ind','beiridh'], ['fut','dep','beir'],
+    ['cond','ind','bheireadh'], ['cond','dep','beireadh'] ] },
   { gd: 'rach', en: 'go', f: [
     ['vn','both','dol'], ['imp','both','rach'],
     ['past','ind','chaidh'], ['past','dep','deach'],
@@ -185,7 +190,7 @@ const VERBS = [
     ['cond','ind','thigeadh'], ['cond','dep','tigeadh'] ] },
   { gd: 'dèan', en: 'do / make', f: [
     ['vn','both','dèanamh'], ['imp','both','dèan'],
-    ['past','both','rinn'],
+    ['past','ind','rinn'], ['past','dep','rinn','do'],
     ['fut','ind','nì'], ['fut','dep','dèan'],
     ['cond','ind','dhèanadh'], ['cond','dep','dèanadh'] ] },
   { gd: 'thoir', en: 'give / take', f: [
@@ -215,7 +220,7 @@ const VERBS = [
     ['cond','ind','theireadh'], ['cond','dep','abradh'] ] },
   { gd: 'ruig', en: 'reach / arrive at', f: [
     ['vn','both','ruigsinn'], ['imp','both','ruig'],
-    ['past','both','ràinig'],
+    ['past','ind','ràinig'], ['past','dep','ràinig','do'],
     ['fut','ind','ruigidh'], ['fut','dep','ruig'],
     ['cond','both','ruigeadh'] ] },
 ];
@@ -255,25 +260,32 @@ const save = () => { try { localStorage.setItem(KEY, JSON.stringify(S)); } catch
 
 /* ============================ DEPENDENT FORMS (cha / an / nach / gun) ============================ */
 const VOW = /^[aeiouàèìòùáéíóú]/i;
-// cha and nach lenite b c f g m p (not d or t); an and gun do not
+// cha / chan lenite b c f g m p (not d or t); nach lenites only f; an / am / gun / gum lenite nothing
 const lenite = w => (/^d’/.test(w) || w[1] === 'h' || !/^[bcfgmp]/i.test(w)) ? w : w[0] + 'h' + w.slice(1);
+const nachMut = w => /^f/i.test(w) ? lenite(w) : w;
 function depParts(r) {
   const len = lenite(r), am = /^[bfmp]/i.test(r);
-  return { len, ch: (VOW.test(len) || /^fh/i.test(len)) ? 'chan' : 'cha', an: am ? 'am' : 'an', gu: am ? 'gum' : 'gun' };
+  return { len, nm: nachMut(r), ch: (VOW.test(len) || /^fh/i.test(len)) ? 'chan' : 'cha', an: am ? 'am' : 'an', gu: am ? 'gum' : 'gun' };
 }
 // how a form is shown: dependent forms are shown with their particles, e.g. "chan / nach fhaca  ·  am / gum faca"
 function disp(e) {
   const r = e[2];
   if (e[1] !== 'dep') return r;
-  if (/^d’/.test(r)) return `cha / an / nach / gun ${r}`;
-  const p = depParts(r);
-  return p.len !== r ? `${p.ch} / nach ${p.len}  ·  ${p.an} / ${p.gu} ${r}` : `${p.ch} / ${p.an} / nach / ${p.gu} ${r}`;
+  if (e[3] === 'do') return `cha / nach / an / gun do ${r} / d’${r}`;
+  if (/^d’/.test(r)) return `cha / nach / an / gun ${r}`;
+  const p = depParts(r), groups = [];
+  for (const [part, form] of [[p.ch, p.len], ['nach', p.nm], [p.an, r], [p.gu, r]]) {
+    const g = groups.find(x => x.form === form);
+    if (g) g.parts.push(part); else groups.push({ form, parts: [part] });
+  }
+  return groups.map(g => `${g.parts.join(' / ')} ${g.form}`).join('  ·  ');
 }
 
 /* ============================ SENTENCES (verbs: fill the gap) ============================ */
 // gd/en = object phrase; vnGd = object after a verbal noun (genitive); imp*/cond override the defaults
 const FR = {
   bi:    { gd: 'sgìth', en: 'tired', condGd: 'toilichte', condEn: 'happy', impGd: 'sàmhach', impEn: 'quiet' },
+  beir:  { gd: 'air a’ bhàla', en: 'the ball' },
   rach:  { gd: 'dhachaigh', en: 'home' },
   thig:  { gd: 'chun na pàrtaidh', en: 'to the party', impGd: 'an seo', impEn: 'here' },
   dèan:  { gd: 'cèic', en: 'a cake', ev: { base: 'make', past: 'made', ing: 'making' } },
@@ -300,7 +312,7 @@ function sentence(v, e) {
     : { gd: `Tha mi ${fr.pre || "a'"} ___ ${fr.vnGd || fr.gd} an-diugh.`, en: `I am ${ev.ing} ${fr.en} today.` }) };
   if (t === 'imp') return { answer: form, gd: `___ ${fr.impGd || fr.gd}!`, en: `${cap(ev.base)} ${fr.impEn || fr.en}!` };
 
-  const dep = k === 'dep' || (k === 'both' && (t === 'past' || t === 'cond') && Math.random() < 0.5);
+  const dep = k === 'dep' || (k === 'both' && t === 'cond' && Math.random() < 0.5);
   const adv = t === 'past' ? [' an-dè', ' yesterday'] : t === 'fut' ? [' a-màireach', ' tomorrow'] : null;
   const cl = fr.cond || DEFAULT_COND;
   const obj = (t === 'cond' && fr.condGd) ? fr.condGd : fr.gd, eobj = (t === 'cond' && fr.condEn) ? fr.condEn : fr.en;
@@ -321,8 +333,9 @@ function sentence(v, e) {
   if (!dep) return { answer: form, gd: `___ mi ${obj}${tailG(false)}.`, en: E('I', 'ind') };
 
   const r = form, p = depParts(r), kind = sample(['cha', 'an', 'nach', 'gun']);
-  const doW = (t === 'past' && k === 'both') ? ' do' : '';
-  const mut = (kind === 'cha' || kind === 'nach') ? p.len : r;
+  const doW = e[3] === 'do' ? ' do' : '';
+  const mutate = kind === 'cha' ? lenite : kind === 'nach' ? nachMut : (w => w);
+  const mut = doW ? r : mutate(r);
   const sec = kind !== 'cha';
   const body = `___ ${sec ? 'thu' : 'mi'} ${obj}${tailG(sec)}`;
   const gd = {
@@ -331,13 +344,14 @@ function sentence(v, e) {
     an: `${cap(doW ? 'an' : p.an)}${doW} ${body}?`,
     gun: `Tha mi cinnteach ${doW ? 'gun' : p.gu}${doW} ${body}.`,
   }[kind];
-  return { answer: mut, gd, en: E(sec ? 'you' : 'I', kind), lenites: !sec || kind === 'nach', alt: mut === r ? lenite(r) : r };
+  return { answer: mut, gd, en: E(sec ? 'you' : 'I', kind), mutate: doW ? (w => w) : mutate, alt: mut === r ? lenite(r) : r };
 }
 
 /* ============================ FACTS & QUESTIONS ============================ */
 const ALLV = VERBS.flatMap(v => v.f.map(e => ({ v, e })));
 const EN = {
   bi:    { base: 'be',               ing: 'being',                past: 'was / were',            pastN: "wasn't / weren't" },
+  beir:  { base: 'catch',            ing: 'catching',             past: 'caught' },
   rach:  { base: 'go',               ing: 'going',                past: 'went' },
   thig:  { base: 'come',             ing: 'coming',               past: 'came' },
   dèan:  { base: 'do / make',        ing: 'doing / making',       past: 'did / made' },
@@ -404,7 +418,7 @@ function buildQ(f, dirSetting) {
   if (dir === 'sent') {
     const sn = sentence(v, e);
     const same = ALLV.filter(x => x.v === v && x.e[2] !== gd);
-    const m = x => (sn.lenites ? lenite(x.e[2]) : x.e[2]);
+    const m = x => (sn.mutate ? sn.mutate(x.e[2]) : x.e[2]);
     const twin = same.filter(x => x.e[0] === e[0]).map(m);
     const groups = [[sn.alt ? [sn.alt] : [], 1], [twin, 1], [same.map(m), 3]];
     return { fact: f, dir, sentence: true, prompt: sn.gd, sub: S.verb.showEn ? sn.en : '', correct: sn.answer,
