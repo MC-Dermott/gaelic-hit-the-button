@@ -253,6 +253,23 @@ try {
 } catch (e) { /* storage unavailable */ }
 const save = () => { try { localStorage.setItem(KEY, JSON.stringify(S)); } catch (e) {} };
 
+/* ============================ DEPENDENT FORMS (cha / an / nach / gun) ============================ */
+const VOW = /^[aeiouàèìòùáéíóú]/i;
+// cha and nach lenite b c f g m p (not d or t); an and gun do not
+const lenite = w => (/^d’/.test(w) || w[1] === 'h' || !/^[bcfgmp]/i.test(w)) ? w : w[0] + 'h' + w.slice(1);
+function depParts(r) {
+  const len = lenite(r), am = /^[bfmp]/i.test(r);
+  return { len, ch: (VOW.test(len) || /^fh/i.test(len)) ? 'chan' : 'cha', an: am ? 'am' : 'an', gu: am ? 'gum' : 'gun' };
+}
+// how a form is shown: dependent forms are shown with their particles, e.g. "chan / nach fhaca  ·  am / gum faca"
+function disp(e) {
+  const r = e[2];
+  if (e[1] !== 'dep') return r;
+  if (/^d’/.test(r)) return `cha / an / nach / gun ${r}`;
+  const p = depParts(r);
+  return p.len !== r ? `${p.ch} / nach ${p.len}  ·  ${p.an} / ${p.gu} ${r}` : `${p.ch} / ${p.an} / nach / ${p.gu} ${r}`;
+}
+
 /* ============================ SENTENCES (verbs: fill the gap) ============================ */
 // gd/en = object phrase; vnGd = object after a verbal noun (genitive); imp*/cond override the defaults
 const FR = {
@@ -272,30 +289,49 @@ const FR = {
 const DEFAULT_COND = ['nan robh an ùine agam', 'nan robh an ùine agad', 'if I had the time', 'if you had the time'];
 const cap = t => t.charAt(0).toUpperCase() + t.slice(1);
 
-// returns { gd: 'Gaelic sentence with ___', en: 'English translation' }
+// returns { gd: 'Gaelic sentence with ___', en: 'English translation', answer: the form that fills the gap }
 function sentence(v, e) {
   const fr = FR[v.gd], x = EN[v.gd], ev = fr.ev || { base: x.base, past: x.past, ing: x.ing };
   const [t, k, form] = e, isBi = v.gd === 'bi';
-  const dep = k === 'dep' || k === 'q' || k === 'nq' || (k === 'both' && (t === 'past' || t === 'cond') && Math.random() < 0.5);
-  const part = (t === 'past' && k === 'both') ? 'An do' : (/^[bfmp]/i.test(form) ? 'Am' : 'An');
-  if (t === 'pres') return {
+  if (t === 'pres') return { answer: form, ...{
     ind: { gd: '___ mi sgìth.', en: 'I am tired.' }, neg: { gd: '___ mi sgìth.', en: 'I am not tired.' },
-    q: { gd: '___ thu sgìth?', en: 'Are you tired?' }, nq: { gd: '___ thu sgìth?', en: 'Aren’t you tired?' } }[k];
-  if (t === 'vn') return isBi ? { gd: 'Tha mi toilichte a ___ an seo.', en: 'I am happy to be here.' }
-    : { gd: `Tha mi ${fr.pre || "a'"} ___ ${fr.vnGd || fr.gd} an-diugh.`, en: `I am ${ev.ing} ${fr.en} today.` };
-  if (t === 'imp') return { gd: `___ ${fr.impGd || fr.gd}!`, en: `${cap(ev.base)} ${fr.impEn || fr.en}!` };
+    q: { gd: '___ thu sgìth?', en: 'Are you tired?' }, nq: { gd: '___ thu sgìth?', en: 'Aren’t you tired?' } }[k] };
+  if (t === 'vn') return { answer: form, ...(isBi ? { gd: 'Tha mi toilichte a ___ an seo.', en: 'I am happy to be here.' }
+    : { gd: `Tha mi ${fr.pre || "a'"} ___ ${fr.vnGd || fr.gd} an-diugh.`, en: `I am ${ev.ing} ${fr.en} today.` }) };
+  if (t === 'imp') return { answer: form, gd: `___ ${fr.impGd || fr.gd}!`, en: `${cap(ev.base)} ${fr.impEn || fr.en}!` };
+
+  const dep = k === 'dep' || (k === 'both' && (t === 'past' || t === 'cond') && Math.random() < 0.5);
   const adv = t === 'past' ? [' an-dè', ' yesterday'] : t === 'fut' ? [' a-màireach', ' tomorrow'] : null;
   const cl = fr.cond || DEFAULT_COND;
   const obj = (t === 'cond' && fr.condGd) ? fr.condGd : fr.gd, eobj = (t === 'cond' && fr.condEn) ? fr.condEn : fr.en;
-  const tail = adv ? adv[0] : ' ' + (dep ? cl[1] : cl[0]), etail = adv ? adv[1] : ' ' + (dep ? cl[3] : cl[2]);
-  const gd = dep ? `${part} ___ thu ${obj}${tail}?` : `___ mi ${obj}${tail}.`;
   const base = isBi ? 'be' : ev.base;
-  let en;
-  if (t === 'past') en = isBi ? (dep ? `Were you ${eobj}${etail}?` : `I was ${eobj}${etail}.`)
-    : (dep ? `Did you ${base} ${eobj}${etail}?` : `I ${ev.past} ${eobj}${etail}.`);
-  else if (t === 'fut') en = dep ? `Will you ${base} ${eobj}${etail}?` : `I will ${base} ${eobj}${etail}.`;
-  else en = dep ? `Would you ${base} ${eobj}${etail}?` : `I would ${base} ${eobj}${etail}.`;
-  return { gd, en };
+  const pastEn = isBi ? 'was' : ev.past;
+  const aux = t === 'past' ? ['didn’t', 'Didn’t', 'Did', 'did'] : t === 'fut' ? ['won’t', 'Won’t', 'Will', 'will'] : ['wouldn’t', 'Wouldn’t', 'Would', 'would'];
+  const verbEn = t === 'past' && isBi ? null : base;           // bi past uses was / wasn't / were
+  const E = (subj, kind) => {                                   // kind: ind | cha | nach | an | gun
+    const tail = (adv ? adv[1] : ' ' + (subj === 'I' ? cl[2] : cl[3]));
+    const o = ` ${eobj}`;
+    if (t === 'past' && isBi) return { ind: `I was${o}${tail}.`, cha: `I wasn’t${o}${tail}.`, nach: `Weren’t you${o}${tail}?`, an: `Were you${o}${tail}?`, gun: `I’m sure you were${o}${tail}.` }[kind];
+    const vb = verbEn;
+    return { ind: t === 'past' ? `I ${pastEn}${o}${tail}.` : `I ${aux[3]} ${vb}${o}${tail}.`,
+      cha: `I ${aux[0]} ${vb}${o}${tail}.`, nach: `${aux[1]} you ${vb}${o}${tail}?`, an: `${aux[2]} you ${vb}${o}${tail}?`,
+      gun: `I’m sure you ${t === 'past' ? pastEn : aux[3] + ' ' + vb}${o}${tail}.` }[kind];
+  };
+  const tailG = (second) => adv ? adv[0] : ' ' + (second ? cl[1] : cl[0]);
+  if (!dep) return { answer: form, gd: `___ mi ${obj}${tailG(false)}.`, en: E('I', 'ind') };
+
+  const r = form, p = depParts(r), kind = sample(['cha', 'an', 'nach', 'gun']);
+  const doW = (t === 'past' && k === 'both') ? ' do' : '';
+  const mut = (kind === 'cha' || kind === 'nach') ? p.len : r;
+  const sec = kind !== 'cha';
+  const body = `___ ${sec ? 'thu' : 'mi'} ${obj}${tailG(sec)}`;
+  const gd = {
+    cha: `${cap(p.ch)}${doW} ${body}.`,
+    nach: `Nach${doW} ${body}?`,
+    an: `${cap(doW ? 'an' : p.an)}${doW} ${body}?`,
+    gun: `Tha mi cinnteach ${doW ? 'gun' : p.gu}${doW} ${body}.`,
+  }[kind];
+  return { answer: mut, gd, en: E(sec ? 'you' : 'I', kind), lenites: !sec || kind === 'nach', alt: mut === r ? lenite(r) : r };
 }
 
 /* ============================ FACTS & QUESTIONS ============================ */
@@ -367,13 +403,15 @@ function buildQ(f, dirSetting) {
   const { v, e } = f; const gd = e[2]; const en = vEn(v, e);
   if (dir === 'sent') {
     const sn = sentence(v, e);
-    const pool = ALLV.filter(x => x.v === v && x.e[2] !== gd);
-    const twin = pool.filter(x => x.e[0] === e[0]).map(x => x.e[2]);
-    return { fact: f, dir, sentence: true, prompt: sn.gd, sub: S.verb.showEn ? sn.en : '', correct: gd,
-             opts: fill(gd, [[twin, 1], [pool.map(x => x.e[2]), 3]], ALLV.map(x => x.e[2])),
-             explain: `${cap(sn.gd.replace('___', gd))}  =  ${sn.en}${depNote(e)}` };
+    const same = ALLV.filter(x => x.v === v && x.e[2] !== gd);
+    const m = x => (sn.lenites ? lenite(x.e[2]) : x.e[2]);
+    const twin = same.filter(x => x.e[0] === e[0]).map(m);
+    const groups = [[sn.alt ? [sn.alt] : [], 1], [twin, 1], [same.map(m), 3]];
+    return { fact: f, dir, sentence: true, prompt: sn.gd, sub: S.verb.showEn ? sn.en : '', correct: sn.answer,
+             opts: fill(sn.answer, groups, ALLV.map(x => x.e[2])),
+             explain: `${cap(sn.gd.replace('___', sn.answer))}  =  ${sn.en}` };
   }
-  const explain = `${gd} = ${en}  (${v.gd}, ${TENSES[e[0]]})${depNote(e)}`;
+  const explain = `${disp(e)}  =  ${en}  (${v.gd}, ${TENSES[e[0]]})`;
   const pool = ALLV.filter(x => x.e[2] !== gd);
   const sameVerb = pool.filter(x => x.v === v);
   const sameTense = pool.filter(x => x.v !== v && x.e[0] === e[0] && x.e[1] === e[1]);
@@ -381,11 +419,11 @@ function buildQ(f, dirSetting) {
   if (dir === 'g2e') {
     const m = x => vEn(x.v, x.e);
     const groups = [[sameVerb.map(m), 1], [sameTense.map(m), 2], [sameTense2.map(m), 2], [sameVerb.map(m), 3]];
-    return { fact: f, dir, prompt: gd, sub: '', correct: en, opts: fill(en, groups, pool.map(m)), explain };
+    return { fact: f, dir, prompt: disp(e), sub: '', correct: en, opts: fill(en, groups, pool.map(m)), explain };
   }
-  const m = x => x.e[2];
+  const m = x => disp(x.e);
   const groups = [[sameVerb.map(m), 1], [sameTense.map(m), 2], [sameTense2.map(m), 2], [sameVerb.map(m), 3]];
-  return { fact: f, dir, prompt: en, sub: `verb: ${v.gd}`, correct: gd, opts: fill(gd, groups, pool.map(m)), explain };
+  return { fact: f, dir, prompt: en, sub: `verb: ${v.gd}`, correct: disp(e), opts: fill(disp(e), groups, pool.map(m)), explain };
 }
 
 /* ============================ SCREENS ============================ */
@@ -531,12 +569,14 @@ function startRun(game, onlyFacts) {
 }
 const stopClock = () => { if (run && run.clock) clearInterval(run.clock); };
 
+const f_audio = (f, q) => f.game === 'verb' ? f.e[2] : (q.dir === 'g2e' ? q.prompt : q.correct);
+
 function nextQ() {
   if (run.blitz && run.idx >= run.queue.length) run.queue.push(...shuffle(run.pool));
   if (run.idx >= run.queue.length) return results();
   const c = S[run.game];
   const q = buildQ(run.queue[run.idx], c.dir);
-  q.audio = q.dir === 'g2e' ? q.prompt : q.correct;   // the Gaelic form
+  q.audio = f_audio(run.queue[run.idx], q);   // the bare Gaelic form
   run.q = q; run.locked = false;
 
   const hud = el('div', { class: 'hud' },
@@ -548,7 +588,7 @@ function nextQ() {
   const timer = el('div', { class: 'timer', style: (c.timer || run.blitz) ? '' : 'visibility:hidden' }, bar);
   const fb = el('div', { class: 'feedback', 'aria-live': 'polite' });
   const buttons = q.opts.map((o, i) => el('button', { class: 'opt', onclick: () => answer(i) }, el('span', { class: 'k' }, i + 1), o));
-  const prompt = el('div', { class: 'card prompt' }, el('div', { class: q.sentence ? 'big sm' : 'big', lang: q.dir === 'e2g' ? 'en' : 'gd' }, q.prompt), el('div', { class: 'sub' }, q.sub), q.dir === 'g2e' ? speaker(q.audio) : null);
+  const prompt = el('div', { class: 'card prompt' }, el('div', { class: (q.sentence || q.prompt.length > 14) ? 'big sm' : 'big', lang: q.dir === 'e2g' ? 'en' : 'gd' }, q.prompt), el('div', { class: 'sub' }, q.sub), q.dir === 'g2e' ? speaker(q.audio) : null);
   q.els = { buttons, fb, bar };
 
   render(hud, timer, prompt, el('div', { class: 'opts' }, buttons), fb);
@@ -628,7 +668,7 @@ function results() {
 }
 function factText(f) {
   if (f.game === 'prep') return `${f.p.gd} + ${PRON_GD[f.i]} = ${f.p.forms[f.i]}  (${pLabel(f.p, f.i)})`;
-  return `${f.e[2]} = ${vEn(f.v, f.e)}  (${f.v.gd}, ${TENSES[f.e[0]]})`;
+  return `${disp(f.e)} = ${vEn(f.v, f.e)}  (${f.v.gd}, ${TENSES[f.e[0]]})`;
 }
 
 /* ============================ REFERENCE ============================ */
@@ -636,16 +676,16 @@ function reference() {
   const prepTable = el('table', {},
     el('thead', {}, el('tr', {}, el('th', {}, 'Preposition'), PRON_GD.map((p, i) => el('th', {}, `${p}`, el('br'), PRON_EN[i])))),
     el('tbody', {}, PREPS.map(p => el('tr', {}, el('td', { class: 'k' }, `${p.gd} (${p.en})`), p.forms.map(f => el('td', {}, f))))));
-  const cell = (v, t) => v.f.filter(e => e[0] === t).map(e => e[2]).join(' / ') || '–';
+  const cell = (v, t) => v.f.filter(e => e[0] === t).map(e => el('div', {}, disp(e))); const cellOrDash = (v, t) => { const c = cell(v, t); return c.length ? c : '–'; };
   const verbTable = el('table', {},
     el('thead', {}, el('tr', {}, el('th', {}, 'Verb'), Object.values(TENSES).map(t => el('th', {}, t)))),
-    el('tbody', {}, VERBS.map(v => el('tr', {}, el('td', { class: 'k' }, `${v.gd} (${v.en})`), Object.keys(TENSES).map(t => el('td', {}, cell(v, t)))))));
+    el('tbody', {}, VERBS.map(v => el('tr', {}, el('td', { class: 'k' }, `${v.gd} (${v.en})`), Object.keys(TENSES).map(t => el('td', {}, cellOrDash(v, t)))))));
   render(
     el('div', { class: 'topbar' }, el('button', { class: 'linkbtn', onclick: home }, '← Menu')),
     el('h2', {}, 'Prepositional pronouns'),
     el('div', { class: 'tablewrap' }, prepTable),
     el('h2', { style: 'margin-top:24px' }, 'Irregular verbs'),
-    el('p', { class: 'small' }, 'Where two forms are shown, the first is the independent (positive) form and the second is the dependent form used after cha, an, nach, gun.'),
+    el('p', { class: 'small' }, 'Where two forms are shown, the first is the independent (positive) form and the second is the dependent form, shown with the particles that use it (cha / chan, an / am, nach, gun / gum).'),
     el('div', { class: 'tablewrap' }, verbTable)
   );
 }
