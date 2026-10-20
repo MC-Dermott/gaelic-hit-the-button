@@ -1,0 +1,579 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Gàidhlig: Hit the Button</title>
+<style>
+:root {
+  --bg: #f4f6fb;
+  --card: #ffffff;
+  --ink: #14213d;
+  --muted: #5b667d;
+  --line: #d6dcea;
+  --accent: #0b4f9c;
+  --accent-ink: #ffffff;
+  --good: #1f8a4c;
+  --good-bg: #dcf4e5;
+  --bad: #c0392b;
+  --bad-bg: #fbe0dc;
+  --shadow: 0 2px 10px rgba(20, 33, 61, .08);
+}
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+    --bg: #0e1424; --card: #172036; --ink: #e8edf8; --muted: #9aa6c0; --line: #2a3654;
+    --accent: #5aa2ff; --accent-ink: #0a1020; --good: #4cd18a; --good-bg: #123a27;
+    --bad: #ff7b6b; --bad-bg: #44211d; --shadow: 0 2px 10px rgba(0,0,0,.4);
+  }
+}
+:root[data-theme="dark"] {
+  --bg: #0e1424; --card: #172036; --ink: #e8edf8; --muted: #9aa6c0; --line: #2a3654;
+  --accent: #5aa2ff; --accent-ink: #0a1020; --good: #4cd18a; --good-bg: #123a27;
+  --bad: #ff7b6b; --bad-bg: #44211d; --shadow: 0 2px 10px rgba(0,0,0,.4);
+}
+* { box-sizing: border-box; }
+html, body { margin: 0; }
+body {
+  background: var(--bg); color: var(--ink);
+  font: 16px/1.45 system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+  min-height: 100vh;
+}
+main { max-width: 760px; margin: 0 auto; padding: 16px; }
+h1 { font-size: 1.7rem; margin: .2em 0 .1em; }
+h2 { font-size: 1.3rem; margin: .2em 0 .6em; }
+h3 { font-size: 1rem; margin: 1.2em 0 .4em; color: var(--muted); text-transform: uppercase; letter-spacing: .05em; }
+p.lead { color: var(--muted); margin-top: 0; }
+button { font: inherit; color: inherit; cursor: pointer; }
+.topbar { display: flex; justify-content: space-between; align-items: center; gap: 8px; margin-bottom: 8px; }
+.linkbtn { background: none; border: none; color: var(--accent); padding: 6px 4px; font-weight: 600; }
+.card {
+  background: var(--card); border: 1px solid var(--line); border-radius: 14px;
+  padding: 16px; box-shadow: var(--shadow);
+}
+.menu { display: grid; gap: 12px; margin-top: 16px; }
+.menu button.card { text-align: left; transition: transform .08s; }
+.menu button.card:hover { transform: translateY(-2px); border-color: var(--accent); }
+.menu .t { font-size: 1.2rem; font-weight: 700; }
+.menu .d { color: var(--muted); }
+.chips { display: flex; flex-wrap: wrap; gap: 8px; }
+.chip { position: relative; }
+.chip input { position: absolute; opacity: 0; inset: 0; width: 100%; height: 100%; margin: 0; cursor: pointer; }
+.chip span {
+  display: inline-block; padding: 7px 12px; border-radius: 999px;
+  border: 1px solid var(--line); background: var(--card); user-select: none;
+}
+.chip span small { color: var(--muted); }
+.chip input:checked + span { background: var(--accent); border-color: var(--accent); color: var(--accent-ink); }
+.chip input:checked + span small { color: inherit; opacity: .8; }
+.chip input:focus-visible + span { outline: 3px solid var(--accent); outline-offset: 2px; }
+.seg { display: inline-flex; border: 1px solid var(--line); border-radius: 10px; overflow: hidden; flex-wrap: wrap; }
+.seg button { border: none; background: var(--card); padding: 8px 14px; }
+.seg button + button { border-left: 1px solid var(--line); }
+.seg button[aria-pressed="true"] { background: var(--accent); color: var(--accent-ink); font-weight: 600; }
+.row { display: flex; gap: 16px; flex-wrap: wrap; align-items: center; }
+.small { font-size: .9rem; color: var(--muted); }
+label.check { display: flex; gap: 8px; align-items: center; margin: 6px 0; }
+select { font: inherit; padding: 6px 8px; border-radius: 8px; border: 1px solid var(--line); background: var(--card); color: var(--ink); }
+.primary {
+  background: var(--accent); color: var(--accent-ink); border: none; border-radius: 12px;
+  padding: 14px 22px; font-weight: 700; font-size: 1.05rem; width: 100%; margin-top: 20px;
+}
+.primary:disabled { opacity: .4; cursor: not-allowed; }
+.secondary { background: var(--card); border: 1px solid var(--line); border-radius: 12px; padding: 12px 18px; font-weight: 600; }
+
+/* play */
+.hud { display: flex; justify-content: space-between; gap: 8px; font-weight: 600; flex-wrap: wrap; }
+.hud .pill { background: var(--card); border: 1px solid var(--line); border-radius: 999px; padding: 3px 12px; }
+.timer { height: 8px; background: var(--line); border-radius: 99px; margin: 10px 0; overflow: hidden; }
+.timer > i { display: block; height: 100%; width: 100%; background: var(--accent); }
+.prompt { text-align: center; padding: 28px 12px; margin: 10px 0 14px; }
+.prompt .big { font-size: clamp(2rem, 8vw, 3.2rem); font-weight: 800; line-height: 1.1; }
+.prompt .sub { color: var(--muted); margin-top: 8px; min-height: 1.4em; }
+.opts { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
+@media (max-width: 520px) { .opts { grid-template-columns: 1fr; } }
+.opt {
+  position: relative; background: var(--card); border: 2px solid var(--line); border-radius: 14px;
+  min-height: 72px; padding: 12px 14px 12px 38px; font-size: 1.15rem; font-weight: 600; text-align: left;
+  box-shadow: var(--shadow); transition: transform .06s, border-color .1s;
+}
+.opt:hover:not(:disabled) { border-color: var(--accent); transform: translateY(-1px); }
+.opt:active:not(:disabled) { transform: scale(.98); }
+.opt .k { position: absolute; left: 12px; top: 10px; font-size: .8rem; color: var(--muted); font-weight: 700; }
+.opt.correct { background: var(--good-bg); border-color: var(--good); }
+.opt.wrong { background: var(--bad-bg); border-color: var(--bad); }
+.opt:disabled { cursor: default; }
+.opt.dim { opacity: .55; }
+.feedback { min-height: 3.2em; margin-top: 14px; text-align: center; }
+.feedback .ok { color: var(--good); font-weight: 700; }
+.feedback .no { color: var(--bad); font-weight: 700; }
+.feedback .ex { color: var(--muted); display: block; }
+.shake { animation: shake .25s; }
+@keyframes shake { 25% { transform: translateX(-6px);} 75% { transform: translateX(6px);} }
+
+/* results + tables */
+.stats { display: grid; grid-template-columns: repeat(auto-fit, minmax(120px, 1fr)); gap: 10px; margin: 12px 0; }
+.stat { text-align: center; padding: 12px; }
+.stat b { display: block; font-size: 1.8rem; }
+.stat span { color: var(--muted); font-size: .85rem; }
+.missed { margin: 0; padding-left: 20px; }
+.missed li { margin: 4px 0; }
+.btns { display: grid; gap: 10px; grid-template-columns: 1fr 1fr; margin-top: 14px; }
+.btns .primary { margin-top: 0; }
+.tablewrap { overflow-x: auto; border: 1px solid var(--line); border-radius: 12px; background: var(--card); }
+table { border-collapse: collapse; width: 100%; font-size: .95rem; }
+th, td { padding: 7px 10px; border-bottom: 1px solid var(--line); text-align: left; white-space: nowrap; }
+th { color: var(--muted); font-weight: 600; font-size: .8rem; text-transform: uppercase; letter-spacing: .04em; }
+tr:last-child td { border-bottom: none; }
+td.k { font-weight: 700; }
+footer { text-align: center; color: var(--muted); font-size: .85rem; padding: 24px 0 8px; }
+</style>
+</head>
+<body>
+<main id="app"></main>
+
+<script>
+/* ============================ DATA ============================ */
+const PRON_GD = ['mi', 'thu', 'e', 'i', 'sinn', 'sibh', 'iad'];
+const PRON_EN = ['me', 'you (sg)', 'him', 'her', 'us', 'you (pl)', 'them'];
+
+// forms: 1sg, 2sg, 3sg m, 3sg f, 1pl, 2pl, 3pl
+const PREPS = [
+  { gd: 'aig',    en: 'at',        forms: ['agam', 'agad', 'aige', 'aice', 'againn', 'agaibh', 'aca'] },
+  { gd: 'air',    en: 'on',        forms: ['orm', 'ort', 'air', 'oirre', 'oirnn', 'oirbh', 'orra'] },
+  { gd: 'à',      en: 'out of',    forms: ['asam', 'asad', 'às', 'aiste', 'asainn', 'asaibh', 'asta'] },
+  { gd: 'do',     en: 'to',        forms: ['dhomh', 'dhut', 'dha', 'dhi', 'dhuinn', 'dhuibh', 'dhaibh'] },
+  { gd: 'de',     en: 'of / off',  forms: ['dhìom', 'dhìot', 'deth', 'dhith', 'dhinn', 'dhibh', 'dhiubh'] },
+  { gd: 'bho',    en: 'from',      forms: ['bhuam', 'bhuat', 'bhuaithe', 'bhuaipe', 'bhuainn', 'bhuaibh', 'bhuapa'] },
+  { gd: 'gu',     en: 'towards',   forms: ['thugam', 'thugad', 'thuige', 'thuice', 'thugainn', 'thugaibh', 'thuca'] },
+  { gd: 'le',     en: 'with',      forms: ['leam', 'leat', 'leis', 'leatha', 'leinn', 'leibh', 'leotha'] },
+  { gd: 'ann an', en: 'in',        forms: ['annam', 'annad', 'ann', 'innte', 'annainn', 'annaibh', 'annta'] },
+  { gd: 'ri',     en: 'against',   forms: ['rium', 'riut', 'ris', 'rithe', 'rinn', 'ribh', 'riutha'] },
+  { gd: 'ro',     en: 'before',    forms: ['romham', 'romhad', 'roimhe', 'roimhpe', 'romhainn', 'romhaibh', 'romhpa'] },
+  { gd: 'mu',     en: 'about',     forms: ['umam', 'umad', 'uime', 'uimpe', 'umainn', 'umaibh', 'umpa'] },
+  { gd: 'fo',     en: 'under',     forms: ['fodham', 'fodhad', 'fodha', 'foidhpe', 'fodhainn', 'fodhaibh', 'fodhpa'] },
+  { gd: 'thar',   en: 'over',      forms: ['tharam', 'tharad', 'thairis', 'thairte', 'tharainn', 'tharaibh', 'tharta'] },
+  { gd: 'tro',    en: 'through',   forms: ['tromham', 'tromhad', 'troimhe', 'troimhpe', 'tromhainn', 'tromhaibh', 'tromhpa'] },
+];
+
+const TENSES = { vn: 'verbal noun', imp: 'imperative', pres: 'present', past: 'past', fut: 'future', cond: 'conditional' };
+// kind: both = same form always; ind = independent (positive); dep = after cha / an / nach / gun
+const KIND = {
+  both: '', ind: ', positive', dep: ', after cha / an / nach',
+  neg: ', negative', q: ', question', nq: ', negative question'
+};
+// [tense, kind, form]
+const VERBS = [
+  { gd: 'bi', en: 'be', f: [
+    ['vn','both','bhith'], ['imp','both','bi'],
+    ['pres','ind','tha'], ['pres','neg','chan eil'], ['pres','q','a bheil'], ['pres','nq','nach eil'],
+    ['past','ind','bha'], ['past','dep','robh'],
+    ['fut','ind','bidh'], ['fut','dep','bi'],
+    ['cond','ind','bhiodh'], ['cond','dep','biodh'] ] },
+  { gd: 'rach', en: 'go', f: [
+    ['vn','both','dol'], ['imp','both','rach'],
+    ['past','ind','chaidh'], ['past','dep','deach'],
+    ['fut','ind','thèid'], ['fut','dep','tèid'],
+    ['cond','both','rachadh'] ] },
+  { gd: 'thig', en: 'come', f: [
+    ['vn','both','tighinn'], ['imp','both','thig'],
+    ['past','ind','thàinig'], ['past','dep','tàinig'],
+    ['fut','ind','thig'], ['fut','dep','tig'],
+    ['cond','ind','thigeadh'], ['cond','dep','tigeadh'] ] },
+  { gd: 'dèan', en: 'do / make', f: [
+    ['vn','both','dèanamh'], ['imp','both','dèan'],
+    ['past','both','rinn'],
+    ['fut','ind','nì'], ['fut','dep','dèan'],
+    ['cond','ind','dhèanadh'], ['cond','dep','dèanadh'] ] },
+  { gd: 'thoir', en: 'give / take', f: [
+    ['vn','both','toirt'], ['imp','both','thoir'],
+    ['past','ind','thug'], ['past','dep','tug'],
+    ['fut','ind','bheir'], ['fut','dep','toir'],
+    ['cond','ind','bheireadh'], ['cond','dep','toireadh'] ] },
+  { gd: 'faic', en: 'see', f: [
+    ['vn','both','faicinn'], ['imp','both','faic'],
+    ['past','ind','chunnaic'], ['past','dep','faca'],
+    ['fut','ind','chì'], ['fut','dep','faic'],
+    ['cond','ind','chitheadh'], ['cond','dep','faiceadh'] ] },
+  { gd: 'faigh', en: 'get', f: [
+    ['vn','both','faighinn'], ['imp','both','faigh'],
+    ['past','ind','fhuair'], ['past','dep','d’ fhuair'],
+    ['fut','ind','gheibh'], ['fut','dep','faigh'],
+    ['cond','ind','gheibheadh'], ['cond','dep','faigheadh'] ] },
+  { gd: 'cluinn', en: 'hear', f: [
+    ['vn','both','cluinntinn'], ['imp','both','cluinn'],
+    ['past','ind','chuala'], ['past','dep','cuala'],
+    ['fut','ind','cluinnidh'], ['fut','dep','cluinn'],
+    ['cond','ind','chluinneadh'], ['cond','dep','cluinneadh'] ] },
+  { gd: 'abair', en: 'say', f: [
+    ['vn','both','ràdh'], ['imp','both','abair'],
+    ['past','ind','thuirt'], ['past','dep','tuirt'],
+    ['fut','ind','their'], ['fut','dep','abair'],
+    ['cond','ind','theireadh'], ['cond','dep','abradh'] ] },
+  { gd: 'ruig', en: 'reach / arrive at', f: [
+    ['vn','both','ruigsinn'], ['imp','both','ruig'],
+    ['past','both','ràinig'],
+    ['fut','ind','ruigidh'], ['fut','dep','ruig'],
+    ['cond','both','ruigeadh'] ] },
+];
+
+/* ============================ UTIL ============================ */
+const $app = document.getElementById('app');
+const shuffle = a => { a = a.slice(); for (let i = a.length - 1; i > 0; i--) { const j = Math.floor(Math.random() * (i + 1)); [a[i], a[j]] = [a[j], a[i]]; } return a; };
+const sample = a => a[Math.floor(Math.random() * a.length)];
+
+function el(tag, props = {}, ...kids) {
+  const e = document.createElement(tag);
+  for (const [k, v] of Object.entries(props)) {
+    if (k === 'class') e.className = v;
+    else if (k.startsWith('on')) e.addEventListener(k.slice(2), v);
+    else if (v !== false && v != null) e.setAttribute(k, v === true ? '' : v);
+  }
+  for (const kid of kids.flat()) {
+    if (kid == null || kid === false) continue;
+    e.append(kid.nodeType ? kid : document.createTextNode(kid));
+  }
+  return e;
+}
+
+/* ============================ STATE ============================ */
+const KEY = 'gaelic-hit-the-button-v1';
+const DEFAULTS = () => ({
+  prep: { sel: ['aig', 'air', 'le', 'do'], dir: 'g2e', hard: false, hint: true, len: 10, timer: 0 },
+  verb: { sel: VERBS.map(v => v.gd), tenses: ['past', 'fut', 'cond'], dep: true, dir: 'g2e', len: 10, timer: 0 },
+  best: { prep: 0, verb: 0 },
+});
+let S = DEFAULTS();
+try {
+  const saved = JSON.parse(localStorage.getItem(KEY) || 'null');
+  if (saved) { const d = DEFAULTS(); S = { prep: { ...d.prep, ...saved.prep }, verb: { ...d.verb, ...saved.verb }, best: { ...d.best, ...saved.best } }; }
+} catch (e) { /* storage unavailable */ }
+const save = () => { try { localStorage.setItem(KEY, JSON.stringify(S)); } catch (e) {} };
+
+/* ============================ FACTS & QUESTIONS ============================ */
+const ALLV = VERBS.flatMap(v => v.f.map(e => ({ v, e })));
+const EN = {
+  bi:    { base: 'be',               ing: 'being',                past: 'was / were',            pastN: "wasn't / weren't" },
+  rach:  { base: 'go',               ing: 'going',                past: 'went' },
+  thig:  { base: 'come',             ing: 'coming',               past: 'came' },
+  dèan:  { base: 'do / make',        ing: 'doing / making',       past: 'did / made' },
+  thoir: { base: 'give / take',      ing: 'giving / taking',      past: 'gave / took' },
+  faic:  { base: 'see',              ing: 'seeing',               past: 'saw' },
+  faigh: { base: 'get',              ing: 'getting',              past: 'got' },
+  cluinn:{ base: 'hear',             ing: 'hearing',              past: 'heard' },
+  abair: { base: 'say',              ing: 'saying',               past: 'said' },
+  ruig:  { base: 'reach / arrive at', ing: 'reaching / arriving at', past: 'reached / arrived at' },
+};
+// English meaning of a form. Dependent forms are shown as the negative; they are also used in questions.
+function vEn(v, e) {
+  const x = EN[v.gd], dep = e[1] === 'dep';
+  switch (e[0]) {
+    case 'vn': return x.ing;
+    case 'imp': return x.base + '!';
+    case 'pres': return { ind: 'am / is / are', neg: 'am / is / are not', q: 'am / is / are … ?', nq: 'am / is / are not … ?' }[e[1]];
+    case 'past': return dep ? (x.pastN || `didn't ${x.base}`) : x.past;
+    case 'fut': return dep ? `won't ${x.base}` : `will ${x.base}`;
+    case 'cond': return dep ? `wouldn't ${x.base}` : `would ${x.base}`;
+  }
+}
+const depNote = e => (e[1] === 'dep' || e[1] === 'neg' || e[1] === 'q' || e[1] === 'nq') ? '  — dependent form, used after cha / an / nach' : '';
+const pLabel = (p, i) => `${p.en} ${PRON_EN[i]}`;
+
+function prepFacts(c) {
+  return PREPS.filter(p => c.sel.includes(p.gd)).flatMap(p => PRON_GD.map((_, i) => ({ game: 'prep', p, i })));
+}
+function verbFacts(c) {
+  return ALLV.filter(({ v, e }) => c.sel.includes(v.gd) && c.tenses.includes(e[0]) && (c.dep || e[1] === 'both' || e[1] === 'ind'))
+             .map(({ v, e }) => ({ game: 'verb', v, e }));
+}
+const factsFor = (game) => game === 'prep' ? prepFacts(S.prep) : verbFacts(S.verb);
+
+// choose 3 distractors: groups = [[candidates, max], ...], then fallback; all are display strings
+function fill(correct, groups, fallback) {
+  const used = new Set([correct]); const out = [];
+  for (const [list, cnt] of groups) {
+    let c = 0;
+    for (const x of shuffle(list)) { if (c >= cnt || out.length >= 3) break; if (!used.has(x)) { used.add(x); out.push(x); c++; } }
+  }
+  for (const x of shuffle(fallback)) { if (out.length >= 3) break; if (!used.has(x)) { used.add(x); out.push(x); } }
+  return shuffle([correct, ...out]);
+}
+
+function buildQ(f, dirSetting) {
+  const dir = dirSetting === 'mix' ? sample(['g2e', 'e2g']) : dirSetting;
+  if (f.game === 'prep') {
+    const { p, i } = f; const c = S.prep;
+    const form = p.forms[i];
+    const explain = `${p.gd} + ${PRON_GD[i]} = ${form}  (${pLabel(p, i)})`;
+    // distractors always come from the same preposition, and always include the
+    // easily-confused he (2), she (3) and them (6) forms where available
+    const must = [2, 3, 6].filter(j => j !== i);
+    const rest = p.forms.map((_, j) => j).filter(j => j !== i && !must.includes(j));
+    const idxs = shuffle([i, ...must, ...shuffle(rest)].slice(0, 4));
+    if (dir === 'g2e') {
+      return { fact: f, dir, prompt: form, sub: '', correct: pLabel(p, i), opts: idxs.map(j => pLabel(p, j)), explain };
+    }
+    return { fact: f, dir, prompt: pLabel(p, i), sub: c.hint ? `preposition: ${p.gd}` : '', correct: form, opts: idxs.map(j => p.forms[j]), explain };
+  }
+  // verbs
+  const { v, e } = f; const gd = e[2]; const en = vEn(v, e);
+  const explain = `${gd} = ${en}  (${v.gd}, ${TENSES[e[0]]})${depNote(e)}`;
+  const pool = ALLV.filter(x => x.e[2] !== gd);
+  const sameVerb = pool.filter(x => x.v === v);
+  const sameTense = pool.filter(x => x.v !== v && x.e[0] === e[0] && x.e[1] === e[1]);
+  const sameTense2 = pool.filter(x => x.v !== v && x.e[0] === e[0]);
+  if (dir === 'g2e') {
+    const m = x => vEn(x.v, x.e);
+    const groups = [[sameVerb.map(m), 1], [sameTense.map(m), 2], [sameTense2.map(m), 2], [sameVerb.map(m), 3]];
+    return { fact: f, dir, prompt: gd, sub: '', correct: en, opts: fill(en, groups, pool.map(m)), explain };
+  }
+  const m = x => x.e[2];
+  const groups = [[sameVerb.map(m), 1], [sameTense.map(m), 2], [sameTense2.map(m), 2], [sameVerb.map(m), 3]];
+  return { fact: f, dir, prompt: en, sub: `verb: ${v.gd}`, correct: gd, opts: fill(gd, groups, pool.map(m)), explain };
+}
+
+/* ============================ SCREENS ============================ */
+let run = null;        // active round
+let timers = [];       // pending timeouts
+const clearTimers = () => { timers.forEach(clearTimeout); timers = []; };
+const later = (fn, ms) => { const t = setTimeout(fn, ms); timers.push(t); };
+
+function render(...nodes) { clearTimers(); document.onkeydown = null; $app.replaceChildren(...nodes.filter(Boolean)); window.scrollTo(0, 0); }
+
+function home() {
+  stopClock(); run = null;
+  render(
+    el('h1', {}, 'Gàidhlig: Hit the Button'),
+    el('p', { class: 'lead' }, 'Quick-fire Scottish Gaelic drills. Pick an answer before the clock runs out.'),
+    el('div', { class: 'menu' },
+      el('button', { class: 'card', onclick: () => setup('prep') },
+        el('div', { class: 't' }, 'Prepositional pronouns'),
+        el('div', { class: 'd' }, 'agam, agad, aige… Choose which prepositions to drill, in either direction.'),
+        el('div', { class: 'small' }, `Best score: ${S.best.prep}`)),
+      el('button', { class: 'card', onclick: () => setup('verb') },
+        el('div', { class: 't' }, 'Irregular verbs'),
+        el('div', { class: 'd' }, 'bi, rach, thig, dèan, thoir, faic, faigh, cluinn, abair, ruig — all tenses and dependent forms.'),
+        el('div', { class: 'small' }, `Best score: ${S.best.verb}`)),
+      el('button', { class: 'card', onclick: reference },
+        el('div', { class: 't' }, 'Reference tables'),
+        el('div', { class: 'd' }, 'Look up every form used in the games.'))
+    ),
+    el('footer', {}, 'Tip: use keys 1–4 to answer and Enter for the next question.')
+  );
+}
+
+function chip(label, small, checked, onchange) {
+  const input = el('input', { type: 'checkbox', onchange: e => onchange(e.target.checked) });
+  input.checked = checked;
+  return el('label', { class: 'chip' }, input, el('span', {}, label, small ? el('small', {}, ' ' + small) : null));
+}
+function seg(options, value, onpick) {
+  const wrap = el('div', { class: 'seg', role: 'group' });
+  const draw = () => wrap.replaceChildren(...options.map(([val, text]) =>
+    el('button', { type: 'button', 'aria-pressed': String(val === value), onclick: () => { value = val; onpick(val); draw(); } }, text)));
+  draw(); return wrap;
+}
+function selectEl(options, value, onpick) {
+  const s = el('select', { onchange: e => onpick(e.target.value) }, options.map(([v, t]) => el('option', { value: v }, t)));
+  s.value = String(value); return s;
+}
+function toggle(list, item, on) { const i = list.indexOf(item); if (on && i < 0) list.push(item); if (!on && i >= 0) list.splice(i, 1); }
+
+function setup(game) {
+  const c = S[game];
+  const startBtn = el('button', { class: 'primary', onclick: () => startRun(game) }, 'Start');
+  const count = el('p', { class: 'small' });
+  const refresh = () => {
+    const n = factsFor(game).length;
+    count.textContent = n ? `${n} possible question${n === 1 ? '' : 's'} with these settings.` : 'Nothing selected — pick at least one option above.';
+    startBtn.disabled = n === 0; save();
+  };
+
+  const dirOpts = [['g2e', 'Gaelic → English'], ['e2g', 'English → Gaelic'], ['mix', 'Mixed']];
+  const items = [];
+
+  if (game === 'prep') {
+    items.push(
+      el('h3', {}, 'Prepositions'),
+      el('div', { class: 'row' },
+        el('button', { class: 'linkbtn', onclick: () => { c.sel = PREPS.map(p => p.gd); setup(game); } }, 'Select all'),
+        el('button', { class: 'linkbtn', onclick: () => { c.sel = []; setup(game); } }, 'Clear')),
+      el('div', { class: 'chips' }, PREPS.map(p => chip(p.gd, `(${p.en})`, c.sel.includes(p.gd), on => { toggle(c.sel, p.gd, on); refresh(); }))),
+      el('h3', {}, 'Direction'), seg(dirOpts, c.dir, v => { c.dir = v; save(); }),
+      el('h3', {}, 'Options'),
+      el('label', { class: 'check' }, (() => { const i = el('input', { type: 'checkbox', onchange: e => { c.hint = e.target.checked; save(); } }); i.checked = c.hint; return i; })(),
+        'English → Gaelic: show which preposition to use')
+    );
+  } else {
+    items.push(
+      el('h3', {}, 'Verbs'),
+      el('div', { class: 'row' },
+        el('button', { class: 'linkbtn', onclick: () => { c.sel = VERBS.map(v => v.gd); setup(game); } }, 'Select all'),
+        el('button', { class: 'linkbtn', onclick: () => { c.sel = []; setup(game); } }, 'Clear')),
+      el('div', { class: 'chips' }, VERBS.map(v => chip(v.gd, `(${v.en})`, c.sel.includes(v.gd), on => { toggle(c.sel, v.gd, on); refresh(); }))),
+      el('h3', {}, 'Forms'),
+      el('div', { class: 'chips' }, Object.entries(TENSES).map(([k, name]) => chip(name, k === 'pres' ? '(bi only)' : '', c.tenses.includes(k), on => { toggle(c.tenses, k, on); refresh(); }))),
+      el('label', { class: 'check' }, (() => { const i = el('input', { type: 'checkbox', onchange: e => { c.dep = e.target.checked; refresh(); } }); i.checked = c.dep; return i; })(),
+        'Include dependent forms (after cha, an, nach) and bi’s negative / question forms'),
+      el('h3', {}, 'Direction'), seg(dirOpts, c.dir, v => { c.dir = v; save(); })
+    );
+  }
+
+  items.push(
+    el('h3', {}, 'Round'),
+    el('div', { class: 'row' },
+      el('label', {}, 'Round: ', selectEl([[10, '10 questions'], [20, '20 questions'], [40, '40 questions'], [0, 'every item once'], [-60, '60-second blitz']], c.len, v => { c.len = +v; save(); })),
+      el('label', {}, 'Per question: ', selectEl([[0, 'no limit'], [5, '5 s'], [8, '8 s'], [12, '12 s']], c.timer, v => { c.timer = +v; save(); }))),
+    el('p', { class: 'small' }, 'Blitz: answer as many as you can in 60 seconds (the per-question limit is ignored).'),
+    count, startBtn
+  );
+
+  render(
+    el('div', { class: 'topbar' }, el('button', { class: 'linkbtn', onclick: home }, '← Menu')),
+    el('h2', {}, game === 'prep' ? 'Prepositional pronouns' : 'Irregular verbs'),
+    el('div', { class: 'card' }, items)
+  );
+  refresh();
+}
+
+function startRun(game, onlyFacts) {
+  const c = S[game];
+  let pool = onlyFacts || factsFor(game);
+  const blitz = !onlyFacts && c.len === -60;
+  let queue;
+  if (blitz) queue = shuffle(pool);
+  else if (onlyFacts) queue = shuffle(onlyFacts);
+  else if (!c.len) queue = shuffle(pool).slice(0, 200);
+  else { queue = []; while (queue.length < c.len) queue.push(...shuffle(pool)); queue = queue.slice(0, c.len); }
+  run = { game, pool, blitz, answered: 0, endAt: blitz ? Date.now() + 60000 : 0, queue, idx: 0, score: 0, streak: 0, bestStreak: 0, right: 0, missed: [], q: null, locked: false };
+  if (blitz) {
+    run.clock = setInterval(() => {
+      if (!run) return;
+      const left = Math.max(0, run.endAt - Date.now());
+      const pill = document.getElementById('clock'), bar = document.querySelector('.timer > i');
+      if (pill) pill.textContent = `⏱ ${Math.ceil(left / 1000)}s`;
+      if (bar) { bar.style.transition = 'none'; bar.style.width = (left / 600) + '%'; }
+      if (left <= 0) results();
+    }, 100);
+  }
+  nextQ();
+}
+const stopClock = () => { if (run && run.clock) clearInterval(run.clock); };
+
+function nextQ() {
+  if (run.blitz && run.idx >= run.queue.length) run.queue.push(...shuffle(run.pool));
+  if (run.idx >= run.queue.length) return results();
+  const c = S[run.game];
+  const q = buildQ(run.queue[run.idx], c.dir);
+  run.q = q; run.locked = false;
+
+  const hud = el('div', { class: 'hud' },
+    el('button', { class: 'linkbtn', onclick: () => confirmQuit() }, '✕ Quit'),
+    run.blitz ? el('span', { class: 'pill', id: 'clock' }, `⏱ ${Math.ceil(Math.max(0, run.endAt - Date.now()) / 1000)}s`) : el('span', { class: 'pill' }, `${run.idx + 1} / ${run.queue.length}`),
+    el('span', { class: 'pill', id: 'score' }, `Score ${run.score}`),
+    el('span', { class: 'pill', id: 'streak' }, `Streak ${run.streak}`));
+  const bar = el('i');
+  const timer = el('div', { class: 'timer', style: (c.timer || run.blitz) ? '' : 'visibility:hidden' }, bar);
+  const fb = el('div', { class: 'feedback', 'aria-live': 'polite' });
+  const buttons = q.opts.map((o, i) => el('button', { class: 'opt', onclick: () => answer(i) }, el('span', { class: 'k' }, i + 1), o));
+  const prompt = el('div', { class: 'card prompt' }, el('div', { class: 'big', lang: q.dir === 'g2e' ? 'gd' : 'en' }, q.prompt), el('div', { class: 'sub' }, q.sub));
+  q.els = { buttons, fb, bar };
+
+  render(hud, timer, prompt, el('div', { class: 'opts' }, buttons), fb);
+  document.onkeydown = e => {
+    if (e.ctrlKey || e.metaKey || e.altKey) return;
+    if (!run.locked && /^[1-4]$/.test(e.key)) answer(+e.key - 1);
+    else if (run.locked && run.waiting && (e.key === 'Enter' || e.key === ' ')) { e.preventDefault(); advance(); }
+  };
+  run.waiting = false;
+  if (run.blitz) bar.style.width = Math.max(0, run.endAt - Date.now()) / 600 + '%';
+  else if (c.timer) {
+    bar.style.transition = 'none'; bar.style.width = '100%'; void bar.offsetWidth;
+    bar.style.transition = `width ${c.timer}s linear`; bar.style.width = '0%';
+    later(() => { if (!run.locked) answer(-1); }, c.timer * 1000);
+  }
+}
+
+function answer(i) {
+  if (!run || run.locked) return;
+  run.locked = true; clearTimers();
+  const q = run.q; const { buttons, fb, bar } = q.els;
+  const ok = i >= 0 && q.opts[i] === q.correct;
+  run.answered++;
+  if (!run.blitz) { const frozen = getComputedStyle(bar).width; bar.style.transition = 'none'; bar.style.width = frozen; }
+  buttons.forEach((b, j) => {
+    b.disabled = true;
+    if (q.opts[j] === q.correct) b.classList.add('correct');
+    else if (j === i) { b.classList.add('wrong', 'shake'); }
+    else b.classList.add('dim');
+  });
+  if (ok) {
+    run.streak++; run.right++; run.bestStreak = Math.max(run.bestStreak, run.streak);
+    run.score += 10 + 2 * Math.min(run.streak - 1, 5);
+    fb.replaceChildren(el('span', { class: 'ok' }, '✓ Correct'), el('span', { class: 'ex' }, q.explain));
+  } else {
+    run.streak = 0; run.missed.push(run.queue[run.idx]);
+    fb.replaceChildren(
+      el('span', { class: 'no' }, i < 0 ? '⏱ Time’s up' : '✗ Not quite'),
+      el('span', { class: 'ex' }, q.explain),
+      el('button', { class: 'secondary', style: 'margin-top:8px', onclick: advance }, 'Next (Enter)'));
+    run.waiting = true;
+    if (run.blitz) later(advance, 1300);
+  }
+  document.getElementById('score').textContent = `Score ${run.score}`;
+  document.getElementById('streak').textContent = `Streak ${run.streak}`;
+  if (ok) later(advance, 750);
+}
+function advance() { if (!run) return; run.idx++; nextQ(); }
+
+function confirmQuit() { home(); }
+
+function results() {
+  stopClock();
+  const r = run; const total = r.blitz ? r.answered : r.queue.length;
+  const newBest = r.score > S.best[r.game];
+  if (newBest) { S.best[r.game] = r.score; save(); }
+  const pct = total ? Math.round(100 * r.right / total) : 0;
+  const missedUniq = [...new Set(r.missed)];
+  const stat = (v, l) => el('div', { class: 'card stat' }, el('b', {}, v), el('span', {}, l));
+  render(
+    el('h2', {}, pct === 100 ? 'Gu math! Perfect round 🎉' : 'Round complete'),
+    el('div', { class: 'stats' }, stat(r.score, newBest ? 'score — new best!' : `score (best ${S.best[r.game]})`), stat(`${r.right}/${total}`, `correct (${pct}%)`), stat(r.bestStreak, 'best streak')),
+    missedUniq.length ? el('div', { class: 'card' }, el('h3', { style: 'margin-top:0' }, 'To review'),
+      el('ul', { class: 'missed' }, missedUniq.map(f => el('li', {}, factText(f))))) : null,
+    el('div', { class: 'btns' },
+      el('button', { class: 'primary', onclick: () => startRun(r.game) }, 'Play again'),
+      missedUniq.length ? el('button', { class: 'primary', onclick: () => startRun(r.game, missedUniq) }, `Practise ${missedUniq.length} missed`) : el('button', { class: 'primary', onclick: () => setup(r.game) }, 'Change settings')),
+    el('div', { class: 'btns' },
+      el('button', { class: 'secondary', onclick: () => setup(r.game) }, 'Settings'),
+      el('button', { class: 'secondary', onclick: home }, 'Menu'))
+  );
+  run = null;
+}
+function factText(f) {
+  if (f.game === 'prep') return `${f.p.gd} + ${PRON_GD[f.i]} = ${f.p.forms[f.i]}  (${pLabel(f.p, f.i)})`;
+  return `${f.e[2]} = ${vEn(f.v, f.e)}  (${f.v.gd}, ${TENSES[f.e[0]]})`;
+}
+
+/* ============================ REFERENCE ============================ */
+function reference() {
+  const prepTable = el('table', {},
+    el('thead', {}, el('tr', {}, el('th', {}, 'Preposition'), PRON_GD.map((p, i) => el('th', {}, `${p}`, el('br'), PRON_EN[i])))),
+    el('tbody', {}, PREPS.map(p => el('tr', {}, el('td', { class: 'k' }, `${p.gd} (${p.en})`), p.forms.map(f => el('td', {}, f))))));
+  const cell = (v, t) => v.f.filter(e => e[0] === t).map(e => e[2]).join(' / ') || '–';
+  const verbTable = el('table', {},
+    el('thead', {}, el('tr', {}, el('th', {}, 'Verb'), Object.values(TENSES).map(t => el('th', {}, t)))),
+    el('tbody', {}, VERBS.map(v => el('tr', {}, el('td', { class: 'k' }, `${v.gd} (${v.en})`), Object.keys(TENSES).map(t => el('td', {}, cell(v, t)))))));
+  render(
+    el('div', { class: 'topbar' }, el('button', { class: 'linkbtn', onclick: home }, '← Menu')),
+    el('h2', {}, 'Prepositional pronouns'),
+    el('div', { class: 'tablewrap' }, prepTable),
+    el('h2', { style: 'margin-top:24px' }, 'Irregular verbs'),
+    el('p', { class: 'small' }, 'Where two forms are shown, the first is the independent (positive) form and the second is the dependent form used after cha, an, nach, gun.'),
+    el('div', { class: 'tablewrap' }, verbTable)
+  );
+}
+
+home();
+</script>
+</body>
+</html>
