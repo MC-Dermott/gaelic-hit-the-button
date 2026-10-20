@@ -103,6 +103,9 @@ select { font: inherit; padding: 6px 8px; border-radius: 8px; border: 1px solid 
 .opt.wrong { background: var(--bad-bg); border-color: var(--bad); }
 .opt:disabled { cursor: default; }
 .opt.dim { opacity: .55; }
+.speaker { background: var(--card); border: 1px solid var(--line); border-radius: 999px; padding: 6px 14px; margin-top: 10px; font-size: 1.1rem; }
+.speaker:hover { border-color: var(--accent); }
+.feedback .speaker { margin: 8px 6px 0; }
 .feedback { min-height: 3.2em; margin-top: 14px; text-align: center; }
 .feedback .ok { color: var(--good); font-weight: 700; }
 .feedback .no { color: var(--bad); font-weight: 700; }
@@ -332,6 +335,17 @@ function buildQ(f, dirSetting) {
 }
 
 /* ============================ SCREENS ============================ */
+/* ---- audio: optional recordings in audio/<slug>.mp3, listed in audio/manifest.json ---- */
+const slug = w => w.normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase().replace(/[^a-z0-9]+/g, '_').replace(/^_|_$/g, '');
+let AUDIO = new Set();
+fetch('audio/manifest.json').then(r => r.ok ? r.json() : []).then(l => { AUDIO = new Set(l); }).catch(() => {});
+const hasAudio = w => AUDIO.has(slug(w));
+function playWord(w) { try { new Audio(`audio/${slug(w)}.mp3`).play().catch(() => {}); } catch (e) {} }
+function speaker(w) {
+  if (!hasAudio(w)) return null;
+  return el('button', { class: 'speaker', type: 'button', title: 'Play (P)', 'aria-label': 'Play audio', onclick: () => playWord(w) }, '🔊');
+}
+
 let run = null;        // active round
 let timers = [];       // pending timeouts
 const clearTimers = () => { timers.forEach(clearTimeout); timers = []; };
@@ -419,6 +433,8 @@ function setup(game) {
   }
 
   items.push(
+    AUDIO.size ? el('label', { class: 'check' }, (() => { const i = el('input', { type: 'checkbox', onchange: e => { c.auto = e.target.checked; save(); } }); i.checked = !!c.auto; return i; })(),
+      'Play audio automatically (where a recording exists)') : null,
     el('h3', {}, 'Round'),
     el('div', { class: 'row' },
       el('label', {}, 'Round: ', selectEl([[10, '10 questions'], [20, '20 questions'], [40, '40 questions'], [0, 'every item once'], [-60, '60-second blitz']], c.len, v => { c.len = +v; save(); })),
@@ -464,6 +480,7 @@ function nextQ() {
   if (run.idx >= run.queue.length) return results();
   const c = S[run.game];
   const q = buildQ(run.queue[run.idx], c.dir);
+  q.audio = q.dir === 'g2e' ? q.prompt : q.correct;   // the Gaelic form
   run.q = q; run.locked = false;
 
   const hud = el('div', { class: 'hud' },
@@ -475,16 +492,18 @@ function nextQ() {
   const timer = el('div', { class: 'timer', style: (c.timer || run.blitz) ? '' : 'visibility:hidden' }, bar);
   const fb = el('div', { class: 'feedback', 'aria-live': 'polite' });
   const buttons = q.opts.map((o, i) => el('button', { class: 'opt', onclick: () => answer(i) }, el('span', { class: 'k' }, i + 1), o));
-  const prompt = el('div', { class: 'card prompt' }, el('div', { class: 'big', lang: q.dir === 'g2e' ? 'gd' : 'en' }, q.prompt), el('div', { class: 'sub' }, q.sub));
+  const prompt = el('div', { class: 'card prompt' }, el('div', { class: 'big', lang: q.dir === 'g2e' ? 'gd' : 'en' }, q.prompt), el('div', { class: 'sub' }, q.sub), q.dir === 'g2e' ? speaker(q.audio) : null);
   q.els = { buttons, fb, bar };
 
   render(hud, timer, prompt, el('div', { class: 'opts' }, buttons), fb);
   document.onkeydown = e => {
     if (e.ctrlKey || e.metaKey || e.altKey) return;
     if (!run.locked && /^[1-4]$/.test(e.key)) answer(+e.key - 1);
+    else if ((e.key === 'p' || e.key === 'P') && hasAudio(run.q.audio)) playWord(run.q.audio);
     else if (run.locked && run.waiting && (e.key === 'Enter' || e.key === ' ')) { e.preventDefault(); advance(); }
   };
   run.waiting = false;
+  if (c.auto && q.dir === 'g2e' && hasAudio(q.audio)) playWord(q.audio);
   if (run.blitz) bar.style.width = Math.max(0, run.endAt - Date.now()) / 600 + '%';
   else if (c.timer) {
     bar.style.transition = 'none'; bar.style.width = '100%'; void bar.offsetWidth;
@@ -519,9 +538,11 @@ function answer(i) {
     run.waiting = true;
     if (run.blitz) later(advance, 1300);
   }
+  const sp = speaker(q.audio); if (sp) fb.append(sp);
+  if (S[run.game].auto && q.dir === 'e2g' && hasAudio(q.audio)) playWord(q.audio);
   document.getElementById('score').textContent = `Score ${run.score}`;
   document.getElementById('streak').textContent = `Streak ${run.streak}`;
-  if (ok) later(advance, 750);
+  if (ok) later(advance, S[run.game].auto && hasAudio(q.audio) ? 1400 : 750);
 }
 function advance() { if (!run) return; run.idx++; nextQ(); }
 
