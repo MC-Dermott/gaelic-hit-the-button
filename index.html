@@ -249,12 +249,12 @@ const KEY = 'gaelic-hit-the-button-v1';
 const DEFAULTS = () => ({
   prep: { sel: ['aig', 'air', 'le', 'do'], dir: 'g2e', hard: false, hint: true, len: 10, timer: 0 },
   verb: { sel: VERBS.map(v => v.gd), tenses: ['past', 'fut', 'cond'], dep: true, dir: 'g2e', showEn: true, len: 10, timer: 0 },
-  best: { prep: 0, verb: 0 },
+  scores: {},   // board key -> top-10 entries (see recordScore)
 });
 let S = DEFAULTS();
 try {
   const saved = JSON.parse(localStorage.getItem(KEY) || 'null');
-  if (saved) { const d = DEFAULTS(); S = { prep: { ...d.prep, ...saved.prep }, verb: { ...d.verb, ...saved.verb }, best: { ...d.best, ...saved.best } }; }
+  if (saved) { const d = DEFAULTS(); S = { prep: { ...d.prep, ...saved.prep }, verb: { ...d.verb, ...saved.verb }, scores: saved.scores || {} }; }
 } catch (e) { /* storage unavailable */ }
 const save = () => { try { localStorage.setItem(KEY, JSON.stringify(S)); } catch (e) {} };
 
@@ -459,6 +459,71 @@ const later = (fn, ms) => { const t = setTimeout(fn, ms); timers.push(t); };
 
 function render(...nodes) { clearTimers(); document.onkeydown = null; $app.replaceChildren(...nodes.filter(Boolean)); window.scrollTo(0, 0); }
 
+/* ============================ HIGH SCORES (stored in this browser) ============================ */
+const DIR_LABEL = { g2e: 'Gaelic → English', e2g: 'English → Gaelic', mix: 'Mixed', sent: 'Fill the gap' };
+const GAME_LABEL = { prep: 'Prepositional pronouns', verb: 'Irregular verbs' };
+const lenLabel = l => l === -60 ? '60-second blitz' : l === 0 ? 'every item once' : `${l} questions`;
+const boardKey = (game, dir, len) => `${game}|${dir}|${len}`;
+const totalRounds = () => Object.values(S.scores).reduce((n, l) => n + l.length, 0);
+const fmtDate = t => new Date(t).toLocaleDateString(undefined, { day: 'numeric', month: 'short', year: 'numeric' });
+function bestLine(game) {
+  const tops = Object.entries(S.scores).filter(([k]) => k.startsWith(game + '|')).map(([, l]) => l[0]).filter(Boolean);
+  return tops.length ? `Highest score: ${Math.max(...tops.map(t => t.score))}` : 'No scores yet';
+}
+// keeps the top 10 per board; returns the new entry's rank (1-based) or null if it missed the table
+function recordScore(r, total) {
+  if (!r.board || !total) return null;
+  const key = boardKey(r.board.game, r.board.dir, r.board.len);
+  const entry = { score: r.score, right: r.right, total, streak: r.bestStreak, date: Date.now(), sel: r.sel };
+  const list = [...(S.scores[key] || []), entry].sort((a, b) => b.score - a.score || a.date - b.date).slice(0, 10);
+  S.scores[key] = list; save();
+  const i = list.indexOf(entry);
+  return i < 0 ? null : i + 1;
+}
+function scoresScreen(msg) {
+  const boards = Object.keys(S.scores).filter(k => S.scores[k].length).sort();
+  const note = el('p', { class: 'small', 'aria-live': 'polite' }, typeof msg === 'string' ? msg : '');
+  const fileIn = el('input', { type: 'file', accept: 'application/json,.json', style: 'display:none', onchange: e => {
+    const file = e.target.files[0]; if (!file) return;
+    file.text().then(txt => {
+      const inc = JSON.parse(txt).scores || {};
+      for (const [k, l] of Object.entries(inc)) {
+        const have = S.scores[k] || [];
+        const all = [...have, ...l.filter(x => !have.some(h => h.date === x.date && h.score === x.score))];
+        S.scores[k] = all.sort((a, b) => b.score - a.score || a.date - b.date).slice(0, 10);
+      }
+      save(); scoresScreen('Scores imported.');
+    }).catch(() => { note.textContent = 'That file could not be read.'; });
+  } });
+  const clearBtn = el('button', { class: 'secondary', onclick: () => {
+    if (clearBtn.dataset.sure) { S.scores = {}; save(); scoresScreen('All scores cleared.'); return; }
+    clearBtn.dataset.sure = '1'; clearBtn.textContent = 'Really clear everything? Click again';
+    later(() => { clearBtn.textContent = 'Clear all'; delete clearBtn.dataset.sure; }, 4000);
+  } }, 'Clear all');
+  const exportBtn = el('button', { class: 'secondary', onclick: () => {
+    const url = URL.createObjectURL(new Blob([JSON.stringify({ scores: S.scores }, null, 1)], { type: 'application/json' }));
+    const a = el('a', { href: url, download: 'gaelic-high-scores.json' }); document.body.append(a); a.click(); a.remove();
+    setTimeout(() => URL.revokeObjectURL(url), 1000);
+  } }, 'Export');
+  const card = k => {
+    const [game, dir, len] = k.split('|');
+    return el('div', {}, el('h3', {}, `${GAME_LABEL[game]} · ${DIR_LABEL[dir]} · ${lenLabel(+len)}`),
+      el('div', { class: 'tablewrap' }, el('table', {},
+        el('thead', {}, el('tr', {}, ['#', 'Score', 'Correct', 'Streak', 'Date', 'Settings'].map(h => el('th', {}, h)))),
+        el('tbody', {}, S.scores[k].map((x, i) => el('tr', {}, el('td', { class: 'k' }, i + 1), el('td', { class: 'k' }, x.score),
+          el('td', {}, `${x.right}/${x.total}`), el('td', {}, x.streak), el('td', {}, fmtDate(x.date)),
+          el('td', { style: 'white-space:normal;color:var(--muted)' }, x.sel || '')))))));
+  };
+  render(
+    el('div', { class: 'topbar' }, el('button', { class: 'linkbtn', onclick: home }, '← Menu')),
+    el('h2', {}, 'High scores'),
+    el('p', { class: 'small' }, 'Scores are saved in this browser only. Use Export to keep a backup or move them to another device.'),
+    el('div', { class: 'row' }, exportBtn, el('button', { class: 'secondary', onclick: () => fileIn.click() }, 'Import'), clearBtn, fileIn),
+    note,
+    ...(boards.length ? boards.map(card) : [el('p', {}, 'Nothing yet — finish a round and your score will appear here.')])
+  );
+}
+
 function home() {
   stopClock(); run = null;
   render(
@@ -468,11 +533,14 @@ function home() {
       el('button', { class: 'card', onclick: () => setup('prep') },
         el('div', { class: 't' }, 'Prepositional pronouns'),
         el('div', { class: 'd' }, 'agam, agad, aige… Choose which prepositions to drill, in either direction.'),
-        el('div', { class: 'small' }, `Best score: ${S.best.prep}`)),
+        el('div', { class: 'small' }, bestLine('prep'))),
       el('button', { class: 'card', onclick: () => setup('verb') },
         el('div', { class: 't' }, 'Irregular verbs'),
         el('div', { class: 'd' }, 'bi, rach, thig, dèan, thoir, faic, faigh, cluinn, abair, ruig — all tenses and dependent forms.'),
-        el('div', { class: 'small' }, `Best score: ${S.best.verb}`)),
+        el('div', { class: 'small' }, bestLine('verb'))),
+      el('button', { class: 'card', onclick: scoresScreen },
+        el('div', { class: 't' }, 'High scores'),
+        el('div', { class: 'd' }, `Your top 10 for every game, mode and round length. ${totalRounds()} round${totalRounds() === 1 ? '' : 's'} recorded.`)),
       el('button', { class: 'card', onclick: reference },
         el('div', { class: 't' }, 'Reference tables'),
         el('div', { class: 'd' }, 'Look up every form used in the games.'))
@@ -568,7 +636,9 @@ function startRun(game, onlyFacts) {
   else if (onlyFacts) queue = shuffle(onlyFacts);
   else if (!c.len) queue = shuffle(pool).slice(0, 200);
   else { queue = []; while (queue.length < c.len) queue.push(...shuffle(pool)); queue = queue.slice(0, c.len); }
-  run = { game, pool, blitz, answered: 0, endAt: blitz ? Date.now() + 60000 : 0, queue, idx: 0, score: 0, streak: 0, bestStreak: 0, right: 0, missed: [], q: null, locked: false };
+  const sel = game === 'prep' ? c.sel.join(', ') : `${c.sel.length === VERBS.length ? 'all verbs' : c.sel.join(', ')} · ${c.tenses.map(t => TENSES[t]).join(', ')}`;
+  const board = onlyFacts ? null : { game, dir: c.dir, len: c.len };
+  run = { board, sel, game, pool, blitz, answered: 0, endAt: blitz ? Date.now() + 60000 : 0, queue, idx: 0, score: 0, streak: 0, bestStreak: 0, right: 0, missed: [], q: null, locked: false };
   if (blitz) {
     run.clock = setInterval(() => {
       if (!run) return;
@@ -661,14 +731,17 @@ function confirmQuit() { home(); }
 function results() {
   stopClock();
   const r = run; const total = r.blitz ? r.answered : r.queue.length;
-  const newBest = r.score > S.best[r.game];
-  if (newBest) { S.best[r.game] = r.score; save(); }
+  const rank = recordScore(r, total);
+  const top = r.board ? (S.scores[boardKey(r.board.game, r.board.dir, r.board.len)] || [])[0] : null;
   const pct = total ? Math.round(100 * r.right / total) : 0;
   const missedUniq = [...new Set(r.missed)];
   const stat = (v, l) => el('div', { class: 'card stat' }, el('b', {}, v), el('span', {}, l));
   render(
     el('h2', {}, pct === 100 ? 'Gu math! Perfect round 🎉' : 'Round complete'),
-    el('div', { class: 'stats' }, stat(r.score, newBest ? 'score — new best!' : `score (best ${S.best[r.game]})`), stat(`${r.right}/${total}`, `correct (${pct}%)`), stat(r.bestStreak, 'best streak')),
+    el('div', { class: 'stats' }, stat(r.score, 'score'), stat(`${r.right}/${total}`, `correct (${pct}%)`), stat(r.bestStreak, 'best streak')),
+    r.board ? el('p', { class: 'card', style: 'text-align:center;font-weight:600' },
+      rank === 1 ? '🏆 New high score for this setting!' : rank ? `#${rank} on your ${lenLabel(r.board.len)} · ${DIR_LABEL[r.board.dir]} board (top: ${top.score})` : `Not in your top 10 here (top: ${top ? top.score : '–'})`,
+      ' ', el('button', { class: 'linkbtn', onclick: scoresScreen }, 'View scores')) : el('p', { class: 'small', style: 'text-align:center' }, 'Practice rounds aren’t added to the high scores.'),
     missedUniq.length ? el('div', { class: 'card' }, el('h3', { style: 'margin-top:0' }, 'To review'),
       el('ul', { class: 'missed' }, missedUniq.map(f => el('li', {}, factText(f))))) : null,
     el('div', { class: 'btns' },
