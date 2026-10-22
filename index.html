@@ -249,12 +249,13 @@ const KEY = 'gaelic-hit-the-button-v1';
 const DEFAULTS = () => ({
   prep: { sel: ['aig', 'air', 'le', 'do'], dir: 'g2e', hard: false, hint: true, len: 10, timer: 0 },
   verb: { sel: VERBS.map(v => v.gd), tenses: ['past', 'fut', 'cond'], dep: true, dir: 'g2e', showEn: true, len: 10, timer: 0 },
+  clause: { sel: ['bi', 'rach', 'faic', 'dèan'], tenses: ['pres', 'past', 'fut', 'cond'], pols: ['pos', 'neg'], dir: 'mix', showEn: true, len: 10, timer: 0 },
   scores: {},   // board key -> top-10 entries (see recordScore)
 });
 let S = DEFAULTS();
 try {
   const saved = JSON.parse(localStorage.getItem(KEY) || 'null');
-  if (saved) { const d = DEFAULTS(); S = { prep: { ...d.prep, ...saved.prep }, verb: { ...d.verb, ...saved.verb }, scores: saved.scores || {} }; }
+  if (saved) { const d = DEFAULTS(); S = { prep: { ...d.prep, ...saved.prep }, verb: { ...d.verb, ...saved.verb }, clause: { ...d.clause, ...saved.clause }, scores: saved.scores || {} }; }
 } catch (e) { /* storage unavailable */ }
 const save = () => { try { localStorage.setItem(KEY, JSON.stringify(S)); } catch (e) {} };
 
@@ -291,9 +292,9 @@ const FR = {
   dèan:  { gd: 'cèic', en: 'a cake', ev: { base: 'make', past: 'made', ing: 'making' } },
   thoir: { gd: 'an leabhar dhi', vnGd: 'an leabhair dhi', en: 'her the book', impGd: 'an leabhar dhomh', impEn: 'me the book',
            ev: { base: 'give', past: 'gave', ing: 'giving' } },
-  faic:  { gd: 'an càr', vnGd: "a' chàir", en: 'the car' },
+  faic:  { gd: 'an càr', vnGd: "a’ chàir", en: 'the car' },
   faigh: { gd: 'airgead', vnGd: 'airgid', en: 'money' },
-  cluinn:{ gd: 'an ceòl', vnGd: "a' chiùil", en: 'the music', impGd: 'seo', impEn: 'this',
+  cluinn:{ gd: 'an ceòl', vnGd: "a’ chiùil", en: 'the music', impGd: 'seo', impEn: 'this',
            cond: ['nan robh mi nas fhaisge', 'nan robh thu nas fhaisge', 'if I were closer', 'if you were closer'] },
   abair: { gd: 'sin', en: 'that', pre: 'ag' },
   ruig:  { gd: 'Glaschu', vnGd: 'Ghlaschu', en: 'Glasgow', ev: { base: 'reach', past: 'reached', ing: 'reaching' } },
@@ -309,7 +310,7 @@ function sentence(v, e) {
     ind: { gd: '___ mi sgìth.', en: 'I am tired.' }, neg: { gd: '___ mi sgìth.', en: 'I am not tired.' },
     q: { gd: '___ thu sgìth?', en: 'Are you tired?' }, nq: { gd: '___ thu sgìth?', en: 'Aren’t you tired?' } }[k] };
   if (t === 'vn') return { answer: form, ...(isBi ? { gd: 'Tha mi toilichte a ___ an seo.', en: 'I am happy to be here.' }
-    : { gd: `Tha mi ${fr.pre || "a'"} ___ ${fr.vnGd || fr.gd} an-diugh.`, en: `I am ${ev.ing} ${fr.en} today.` }) };
+    : { gd: `Tha mi ${fr.pre || "a’"} ___ ${fr.vnGd || fr.gd} an-diugh.`, en: `I am ${ev.ing} ${fr.en} today.` }) };
   if (t === 'imp') return { answer: form, gd: `___ ${fr.impGd || fr.gd}!`, en: `${cap(ev.base)} ${fr.impEn || fr.en}!` };
 
   const dep = k === 'dep' || (k === 'both' && t === 'cond' && Math.random() < 0.5);
@@ -345,6 +346,88 @@ function sentence(v, e) {
     gun: `Tha mi cinnteach ${doW ? 'gun' : p.gu}${doW} ${body}.`,
   }[kind];
   return { answer: mut, gd, en: E(sec ? 'you' : 'I', kind), mutate: doW ? (w => w) : mutate, alt: mut === r ? lenite(r) : r };
+}
+
+/* ============================ JOINING CLAUSES (reported speech) ============================ */
+const MAIN = [
+  { gd: 'Tha mi ag ràdh', en: 'I say that' },
+  { gd: 'Tha mi a’ smaoineachadh', en: 'I think that' },
+  { gd: 'Tha fios agam', en: 'I know that' },
+  { gd: 'Tha mi cinnteach', en: 'I’m sure that' },
+  { gd: 'Thuirt e', en: 'He said that', past: true },
+  { gd: 'Bha mi a’ smaoineachadh', en: 'I thought that', past: true },
+  { gd: 'Chuala mi', en: 'I heard that', past: true },
+];
+const SUBJ = [
+  { gd: 'e', en: 'he', be: 'is', was: 'was', nbe: 'isn’t', nwas: 'wasn’t' },
+  { gd: 'i', en: 'she', be: 'is', was: 'was', nbe: 'isn’t', nwas: 'wasn’t' },
+  { gd: 'iad', en: 'they', be: 'are', was: 'were', nbe: 'aren’t', nwas: 'weren’t' },
+  { gd: 'thu', en: 'you', be: 'are', was: 'were', nbe: 'aren’t', nwas: 'weren’t' },
+  { gd: 'sinn', en: 'we', be: 'are', was: 'were', nbe: 'aren’t', nwas: 'weren’t' },
+  { gd: 'mi', en: 'I', be: 'am', was: 'was', nbe: 'am not', nwas: 'wasn’t' },
+];
+const BI_SUB = {
+  pres: { pos: ['gu', 'bheil'], neg: ['nach', 'eil'] },
+  past: { pos: ['gun', 'robh'], neg: ['nach', 'robh'] },
+  fut:  { pos: ['gum', 'bi'],   neg: ['nach', 'bi'] },
+  cond: { pos: ['gum', 'biodh'], neg: ['nach', 'biodh'] },
+};
+const CLAUSE_TENSES = ['pres', 'past', 'fut', 'cond'];
+const PARTICLES = ['gu', 'gun', 'gum', 'nach'];
+const COND_TAIL = [' nan robh an ùine aige', ' if he had the time'];
+
+// particle + verb for a dependent clause: { part, verb, full }
+function subForm(v, t, pol) {
+  if (v.gd === 'bi' || t === 'pres') { const [part, verb] = BI_SUB[t][pol]; return { part, verb, full: `${part} ${verb}` }; }
+  const ents = v.f.filter(e => e[0] === t);
+  const e = ents.find(x => x[1] === 'dep') || ents.find(x => x[1] === 'both');
+  const r = e[2], d = e[3] === 'do';
+  const part = pol === 'pos' ? ((!d && /^[bfmp]/i.test(r)) ? 'gum' : 'gun') : 'nach';
+  const verb = (d ? 'do ' : '') + (pol === 'neg' && !d ? nachMut(r) : r);
+  return { part, verb, full: `${part} ${verb}` };
+}
+
+function clauseSentence(f, gap) {
+  const { v, t, pol } = f, isBi = v.gd === 'bi';
+  const fr = FR[v.gd], x = EN[v.gd], ev = fr.ev || { base: x.base, past: x.past, ing: x.ing };
+  // past-tense main verbs only report past or conditional (“would”) clauses
+  const main = sample(MAIN.filter(m => !m.past || t === 'past' || t === 'cond')), subj = t === 'cond' ? SUBJ[0] : sample(SUBJ), sf = subForm(v, t, pol);
+  const adv = t === 'pres' ? [' an-dràsta', ' right now'] : t === 'past' ? [' an-dè', ' yesterday'] : t === 'fut' ? [' a-màireach', ' tomorrow'] : COND_TAIL;
+  const obj = (t === 'cond' && fr.condGd) ? fr.condGd : fr.gd, eobj = (t === 'cond' && fr.condEn) ? fr.condEn : fr.en;
+  let rest;
+  if (t === 'pres' && !isBi) {
+    const vn = v.f.find(e => e[0] === 'vn')[2];
+    rest = `${subj.gd} ${fr.pre || "a’"} ${vn} ${fr.vnGd || fr.gd}${adv[0]}`;
+  } else rest = `${subj.gd} ${obj}${adv[0]}`;
+  const base = isBi ? 'be' : ev.base, neg = pol === 'neg';
+  let en;
+  if (t === 'pres') en = isBi ? `${subj.en} ${neg ? subj.nbe : subj.be} ${eobj}` : `${subj.en} ${neg ? subj.nbe : subj.be} ${ev.ing} ${eobj}`;
+  else if (t === 'past') en = isBi ? `${subj.en} ${neg ? subj.nwas : subj.was} ${eobj}` : (neg ? `${subj.en} didn’t ${base} ${eobj}` : `${subj.en} ${ev.past} ${eobj}`);
+  else if (t === 'fut') en = `${subj.en} ${neg ? 'won’t' : 'will'} ${base} ${eobj}`;
+  else en = `${subj.en} ${neg ? 'wouldn’t' : 'would'} ${base} ${eobj}`;
+  en = `${main.en} ${en}${adv[1]}.`;
+  const full = `${main.gd} ${sf.full} ${rest}.`;
+  const note = gap === 'part'
+    ? (pol === 'neg' ? 'nach = “that … not”, followed by the dependent form'
+       : 'gu before bheil · gum before b, f, m, p · gun elsewhere, followed by the dependent form')
+    : '';
+  if (gap === 'part') return { gd: `${main.gd} ___ ${sf.verb} ${rest}.`, en, answer: sf.part, full, note };
+  return { gd: `${main.gd} ___ ${rest}.`, en, answer: sf.full, full, note };
+}
+
+function buildClause(f, dirSetting) {
+  const gap = dirSetting === 'mix' ? sample(['part', 'phrase']) : dirSetting;
+  const sn = clauseSentence(f, gap);
+  let opts;
+  if (gap === 'part') opts = shuffle(PARTICLES);
+  else {
+    const flip = subForm(f.v, f.t, f.pol === 'pos' ? 'neg' : 'pos').full;
+    const others = CLAUSE_TENSES.filter(t => t !== f.t).map(t => subForm(f.v, t, f.pol).full);
+    const flips = CLAUSE_TENSES.filter(t => t !== f.t).map(t => subForm(f.v, t, f.pol === 'pos' ? 'neg' : 'pos').full);
+    opts = fill(sn.answer, [[[flip], 1], [others, 2], [flips, 3]], PARTICLES.flatMap(p => ['bheil', 'robh', 'bi'].map(w => `${p} ${w}`)));
+  }
+  return { fact: f, dir: gap, sentence: true, prompt: sn.gd, sub: S.clause.showEn ? sn.en : '', correct: sn.answer, opts,
+           explain: `${sn.full}  =  ${sn.en}`, note: sn.note };
 }
 
 /* ============================ FACTS & QUESTIONS ============================ */
@@ -384,7 +467,10 @@ function verbFacts(c) {
   return ALLV.filter(({ v, e }) => c.sel.includes(v.gd) && c.tenses.includes(e[0]) && (c.dep || e[1] === 'both' || e[1] === 'ind'))
              .map(({ v, e }) => ({ game: 'verb', v, e }));
 }
-const factsFor = (game) => game === 'prep' ? prepFacts(S.prep) : verbFacts(S.verb);
+function clauseFacts(c) {
+  return VERBS.filter(v => c.sel.includes(v.gd)).flatMap(v => c.tenses.flatMap(t => c.pols.map(pol => ({ game: 'clause', v, t, pol }))));
+}
+const factsFor = (game) => game === 'prep' ? prepFacts(S.prep) : game === 'clause' ? clauseFacts(S.clause) : verbFacts(S.verb);
 
 // choose 3 distractors: groups = [[candidates, max], ...], then fallback; all are display strings
 function fill(correct, groups, fallback) {
@@ -398,6 +484,7 @@ function fill(correct, groups, fallback) {
 }
 
 function buildQ(f, dirSetting) {
+  if (f.game === 'clause') return buildClause(f, dirSetting);
   const dir = dirSetting === 'mix' ? sample(['g2e', 'e2g']) : dirSetting;
   if (f.game === 'prep') {
     const { p, i } = f; const c = S.prep;
@@ -460,8 +547,8 @@ const later = (fn, ms) => { const t = setTimeout(fn, ms); timers.push(t); };
 function render(...nodes) { clearTimers(); document.onkeydown = null; $app.replaceChildren(...nodes.filter(Boolean)); window.scrollTo(0, 0); }
 
 /* ============================ HIGH SCORES (stored in this browser) ============================ */
-const DIR_LABEL = { g2e: 'Gaelic → English', e2g: 'English → Gaelic', mix: 'Mixed', sent: 'Fill the gap' };
-const GAME_LABEL = { prep: 'Prepositional pronouns', verb: 'Irregular verbs' };
+const DIR_LABEL = { g2e: 'Gaelic → English', e2g: 'English → Gaelic', mix: 'Mixed', sent: 'Fill the gap', part: 'Joining word', phrase: 'Word + verb form' };
+const GAME_LABEL = { prep: 'Prepositional pronouns', verb: 'Irregular verbs', clause: 'Joining clauses' };
 const lenLabel = l => l === -60 ? '60-second blitz' : l === 0 ? 'every item once' : `${l} questions`;
 const boardKey = (game, dir, len) => `${game}|${dir}|${len}`;
 const totalRounds = () => Object.values(S.scores).reduce((n, l) => n + l.length, 0);
@@ -538,6 +625,10 @@ function home() {
         el('div', { class: 't' }, 'Irregular verbs'),
         el('div', { class: 'd' }, 'bi, rach, thig, dèan, thoir, faic, faigh, cluinn, abair, ruig — all tenses and dependent forms.'),
         el('div', { class: 'small' }, bestLine('verb'))),
+      el('button', { class: 'card', onclick: () => setup('clause') },
+        el('div', { class: 't' }, 'Joining clauses'),
+        el('div', { class: 'd' }, 'Reported speech: gu, gun, gum, nach + the right verb form, in every tense.'),
+        el('div', { class: 'small' }, bestLine('clause'))),
       el('button', { class: 'card', onclick: scoresScreen },
         el('div', { class: 't' }, 'High scores'),
         el('div', { class: 'd' }, `Your top 10 for every game, mode and round length. ${totalRounds()} round${totalRounds() === 1 ? '' : 's'} recorded.`)),
@@ -591,6 +682,23 @@ function setup(game) {
       el('label', { class: 'check' }, (() => { const i = el('input', { type: 'checkbox', onchange: e => { c.hint = e.target.checked; save(); } }); i.checked = c.hint; return i; })(),
         'English → Gaelic: show which preposition to use')
     );
+  } else if (game === 'clause') {
+    items.push(
+      el('p', { class: 'small' }, 'Fill in the word that joins the clauses, e.g. Tha mi ag ràdh ___ deach e dhachaigh. (gun)'),
+      el('h3', {}, 'Verbs in the second clause'),
+      el('div', { class: 'row' },
+        el('button', { class: 'linkbtn', onclick: () => { c.sel = VERBS.map(v => v.gd); setup(game); } }, 'Select all'),
+        el('button', { class: 'linkbtn', onclick: () => { c.sel = []; setup(game); } }, 'Clear')),
+      el('div', { class: 'chips' }, VERBS.map(v => chip(v.gd, `(${v.en})`, c.sel.includes(v.gd), on => { toggle(c.sel, v.gd, on); refresh(); }))),
+      el('h3', {}, 'Tenses'),
+      el('div', { class: 'chips' }, CLAUSE_TENSES.map(k => chip(TENSES[k], k === 'pres' ? '(gu bheil / nach eil)' : '', c.tenses.includes(k), on => { toggle(c.tenses, k, on); refresh(); }))),
+      el('h3', {}, 'Positive / negative'),
+      el('div', { class: 'chips' }, [['pos', 'positive (gu, gun, gum)'], ['neg', 'negative (nach)']].map(([k, n]) => chip(n, '', c.pols.includes(k), on => { toggle(c.pols, k, on); refresh(); }))),
+      el('h3', {}, 'What goes in the gap'),
+      seg([['mix', 'Mixed'], ['part', 'Joining word only'], ['phrase', 'Word + verb form']], c.dir, v => { c.dir = v; save(); }),
+      el('label', { class: 'check' }, (() => { const i = el('input', { type: 'checkbox', onchange: e => { c.showEn = e.target.checked; save(); } }); i.checked = c.showEn; return i; })(),
+        'Show the English translation')
+    );
   } else {
     items.push(
       el('h3', {}, 'Verbs'),
@@ -621,7 +729,7 @@ function setup(game) {
 
   render(
     el('div', { class: 'topbar' }, el('button', { class: 'linkbtn', onclick: home }, '← Menu')),
-    el('h2', {}, game === 'prep' ? 'Prepositional pronouns' : 'Irregular verbs'),
+    el('h2', {}, GAME_LABEL[game]),
     el('div', { class: 'card' }, items)
   );
   refresh();
@@ -653,7 +761,7 @@ function startRun(game, onlyFacts) {
 }
 const stopClock = () => { if (run && run.clock) clearInterval(run.clock); };
 
-const f_audio = (f, q) => f.game === 'verb' ? f.e[2] : (q.dir === 'g2e' ? q.prompt : q.correct);
+const f_audio = (f, q) => f.game === 'clause' ? '' : f.game === 'verb' ? f.e[2] : (q.dir === 'g2e' ? q.prompt : q.correct);
 
 function nextQ() {
   if (run.blitz && run.idx >= run.queue.length) run.queue.push(...shuffle(run.pool));
@@ -708,12 +816,12 @@ function answer(i) {
   if (ok) {
     run.streak++; run.right++; run.bestStreak = Math.max(run.bestStreak, run.streak);
     run.score += 10 + 2 * Math.min(run.streak - 1, 5);
-    fb.replaceChildren(el('span', { class: 'ok' }, '✓ Correct'), el('span', { class: 'ex' }, q.explain));
+    fb.replaceChildren(el('span', { class: 'ok' }, '✓ Correct'), el('span', { class: 'ex' }, q.explain), q.note ? el('span', { class: 'ex' }, q.note) : null);
   } else {
     run.streak = 0; run.missed.push(run.queue[run.idx]);
     fb.replaceChildren(
       el('span', { class: 'no' }, i < 0 ? '⏱ Time’s up' : '✗ Not quite'),
-      el('span', { class: 'ex' }, q.explain),
+      el('span', { class: 'ex' }, q.explain), q.note ? el('span', { class: 'ex' }, q.note) : null,
       el('button', { class: 'secondary', style: 'margin-top:8px', onclick: advance }, 'Next (Enter)'));
     run.waiting = true;
     if (run.blitz) later(advance, 1300);
@@ -755,6 +863,7 @@ function results() {
 }
 function factText(f) {
   if (f.game === 'prep') return `${f.p.gd} + ${PRON_GD[f.i]} = ${f.p.forms[f.i]}  (${pLabel(f.p, f.i)})`;
+  if (f.game === 'clause') return `${subForm(f.v, f.t, f.pol).full}  (${f.v.gd}, ${TENSES[f.t]}, ${f.pol === 'pos' ? 'positive' : 'negative'})`;
   return `${disp(f.e)} = ${vEn(f.v, f.e)}  (${f.v.gd}, ${TENSES[f.e[0]]})`;
 }
 
