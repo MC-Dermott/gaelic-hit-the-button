@@ -4,7 +4,8 @@ A single-file, no-dependency Scottish Gaelic drill app.
 
 - **Prepositional pronouns**: choose which prepositions to include, and drill Gaelic → English, English → Gaelic, or mixed.
 - **Irregular verbs**: bi, rach, thig, dèan, thoir, faic, faigh, cluinn, abair, ruig (verbal noun, imperative, present, past, future, conditional, plus dependent forms).
-- **Joining clauses**: reported-speech fill-the-gap (gu / gun / gum / nach, alone or with the verb form) across present, past, future and conditional.
+- **Joining clauses**: reported-speech fill-the-gap (gu / gun / gum / nach / gur / gum bu, alone or with the verb form, including the copula) across present, past, future and conditional.
+- **Cleft sentences**: choose ’S e / ’S ann (and Chan, An, Nach, B’ forms) for the emphasised phrase.
 - Optional per-question timer, streaks, best scores (saved in the browser), "practise missed" and reference tables.
 
 ## Adding audio

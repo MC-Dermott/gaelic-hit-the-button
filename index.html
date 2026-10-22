@@ -249,13 +249,14 @@ const KEY = 'gaelic-hit-the-button-v1';
 const DEFAULTS = () => ({
   prep: { sel: ['aig', 'air', 'le', 'do'], dir: 'g2e', hard: false, hint: true, len: 10, timer: 0 },
   verb: { sel: VERBS.map(v => v.gd), tenses: ['past', 'fut', 'cond'], dep: true, dir: 'g2e', showEn: true, len: 10, timer: 0 },
-  clause: { sel: ['bi', 'rach', 'faic', 'dèan'], tenses: ['pres', 'past', 'fut', 'cond'], pols: ['pos', 'neg'], dir: 'mix', showEn: true, len: 10, timer: 0 },
+  cleft: { kinds: ['e', 'ann'], tenses: ['pres', 'past'], pols: ['pos', 'neg', 'q'], dir: 'opener', showEn: true, len: 10, timer: 0 },
+  clause: { sel: ['bi', 'rach', 'faic', 'dèan', 'is'], tenses: ['pres', 'past', 'fut', 'cond'], pols: ['pos', 'neg'], dir: 'mix', showEn: true, len: 10, timer: 0 },
   scores: {},   // board key -> top-10 entries (see recordScore)
 });
 let S = DEFAULTS();
 try {
   const saved = JSON.parse(localStorage.getItem(KEY) || 'null');
-  if (saved) { const d = DEFAULTS(); S = { prep: { ...d.prep, ...saved.prep }, verb: { ...d.verb, ...saved.verb }, clause: { ...d.clause, ...saved.clause }, scores: saved.scores || {} }; }
+  if (saved) { const d = DEFAULTS(); S = { prep: { ...d.prep, ...saved.prep }, verb: { ...d.verb, ...saved.verb }, clause: { ...d.clause, ...saved.clause }, cleft: { ...d.cleft, ...saved.cleft }, scores: saved.scores || {} }; }
 } catch (e) { /* storage unavailable */ }
 const save = () => { try { localStorage.setItem(KEY, JSON.stringify(S)); } catch (e) {} };
 
@@ -415,7 +416,56 @@ function clauseSentence(f, gap) {
   return { gd: `${main.gd} ___ ${rest}.`, en, answer: sf.full, full, note };
 }
 
+/* ---- copula (is / bu): gur, gum bu / gum b’, nach, nach bu / nach b’ ---- */
+const ELIDES = w => /^[aeiouàèìòùáéíóú]/i.test(w) || /^fh/i.test(w);
+const buFor = first => ELIDES(first) ? 'b’' : 'bu';
+const COP_SUBJ = [['I', 'like'], ['you', 'like'], ['he', 'likes'], ['she', 'likes'], ['we', 'like'], ['you', 'like'], ['they', 'like']];
+function copulaParts(f) {
+  const { cop, t, pol } = f, neg = pol === 'neg', past = t === 'past';
+  const le = PREPS.find(p => p.gd === 'le').forms, ann = PREPS.find(p => p.gd === 'ann an').forms;
+  const i = Math.floor(Math.random() * 7);
+  if (cop === 'math') {
+    const first = past ? 'mhath' : 'math';
+    return { first, rest: `${first} seo`, en: `this ${past ? (neg ? 'wasn’t' : 'was') : (neg ? 'isn’t' : 'is')} good` };
+  }
+  if (cop === 'toil' || cop === 'fheàrr') {
+    const [sub, vb] = COP_SUBJ[i], verb = cop === 'toil' ? 'like' : 'prefer', obj = cop === 'toil' ? 'cake' : 'tea';
+    const aux = vb === 'likes' ? 'doesn’t' : 'don’t';
+    const en = past ? `${sub} ${neg ? 'wouldn’t' : 'would'} ${verb} ${obj}` : (neg ? `${sub} ${aux} ${verb} ${obj}` : `${sub} ${vb === 'likes' ? verb + 's' : verb} ${obj}`);
+    return { first: cop, rest: `${cop} ${le[i]} ${cop === 'toil' ? 'cèic' : 'tì'}`, en };
+  }
+  const k = sample([2, 3, 6]), pron = { 2: 'e', 3: 'i', 6: 'iad' }[k], sub = { 2: 'he', 3: 'she', 6: 'they' }[k];
+  const be = past ? (k === 6 ? 'were' : 'was') : (k === 6 ? 'are' : 'is'), nbe = past ? (k === 6 ? 'weren’t' : 'wasn’t') : (k === 6 ? 'aren’t' : 'isn’t');
+  return { first: pron, rest: `${pron} ${k === 6 ? 'tidsearan' : 'tidsear'} a ${past ? 'bh’' : 'th’'} ${ann[k]}`,
+           en: `${sub} ${neg ? nbe : be} ${k === 6 ? 'teachers' : 'a teacher'}` };
+}
+const copForm = (t, pol, first) => t === 'pres' ? (pol === 'pos' ? 'gur' : 'nach') : `${pol === 'pos' ? 'gum' : 'nach'} ${buFor(first)}`;
+
+function buildCopula(f, dirSetting) {
+  const gap = dirSetting === 'mix' ? sample(['part', 'phrase']) : dirSetting;
+  const { t, pol } = f, past = t === 'past';
+  const main = sample(MAIN.filter(m => !m.past || past));
+  const cp = copulaParts(f), full = copForm(t, pol, cp.first), other = pol === 'pos' ? 'neg' : 'pos', ot = past ? 'pres' : 'past';
+  const joiner = full.split(' ')[0], bu = past ? ' ' + buFor(cp.first) : '';
+  const en = `${main.en} ${cp.en}.`;
+  const gd = gap === 'part' ? `${main.gd} ___${bu} ${cp.rest}.` : `${main.gd} ___ ${cp.rest}.`;
+  const answer = gap === 'part' ? joiner : full;
+  let opts;
+  if (gap === 'part') opts = shuffle(['gur', 'gun', 'gum', 'nach']);
+  else {
+    const wrongEl = past ? `${joiner} ${buFor(cp.first) === 'bu' ? 'b’' : 'bu'}` : copForm('past', pol, cp.first).replace(/ (bu|b’)$/, m => m === ' bu' ? ' b’' : ' bu');
+    opts = fill(full, [[[copForm(t, other, cp.first)], 1], [[copForm(ot, pol, cp.first)], 1], [[wrongEl], 1]],
+                ['gur', 'nach', 'gum bu', 'gum b’', 'nach bu', 'nach b’']);
+  }
+  const note = gap === 'part'
+    ? (past ? 'is → bu (b’ before a vowel or fh): gum bu / gum b’, nach bu / nach b’' : 'is → gur (“that … is”); nach = “that … is not”')
+    : 'gur / nach with is; gum bu or nach bu in the past — bu becomes b’ before a vowel or fh (gum b’ fheàrr, gum b’ e)';
+  return { fact: f, dir: gap, sentence: true, prompt: gd, sub: S.clause.showEn ? en : '', correct: answer, opts,
+           explain: `${main.gd} ${full} ${cp.rest}.  =  ${en}`, note };
+}
+
 function buildClause(f, dirSetting) {
+  if (f.cop) return buildCopula(f, dirSetting);
   const gap = dirSetting === 'mix' ? sample(['part', 'phrase']) : dirSetting;
   const sn = clauseSentence(f, gap);
   let opts;
@@ -428,6 +478,63 @@ function buildClause(f, dirSetting) {
   }
   return { fact: f, dir: gap, sentence: true, prompt: sn.gd, sub: S.clause.showEn ? sn.en : '', correct: sn.answer, opts,
            explain: `${sn.full}  =  ${sn.en}`, note: sn.note };
+}
+
+/* ============================ CLEFT SENTENCES (’S e / ’S ann) ============================ */
+const CLEFT_FORM = {
+  pres: { pos: ['’S e', '’S ann'], neg: ['Chan e', 'Chan ann'], q: ['An e', 'An ann'], nq: ['Nach e', 'Nach ann'] },
+  past: { pos: ['B’ e', 'B’ ann'], neg: ['Cha b’ e', 'Cha b’ ann'], q: ['Am b’ e', 'Am b’ ann'], nq: ['Nach b’ e', 'Nach b’ ann'] },
+};
+const CLEFT_LEAD = {
+  pres: { pos: 'It’s', neg: 'It isn’t', q: 'Is it', nq: 'Isn’t it' },
+  past: { pos: 'It was', neg: 'It wasn’t', q: 'Was it', nq: 'Wasn’t it' },
+};
+const CS = [{ gd: 'mi', en: 'I', prep: 'am', be: 'am', was: 'was' }, { gd: 'thu', en: 'you', prep: 'ad', be: 'are', was: 'were' }];
+const same = (gd, en) => () => ({ gd, en });
+// kind: e = noun / pronoun focus, ann = prepositional phrase / adverb / adjective focus
+const CLEFT_ITEMS = [
+  { t: 'pres', kind: 'e', focus: 'Mòrag', enFocus: 'Mòrag', rest: s => ({ gd: `a chunnaic ${s.gd}`, en: `${s.en} saw` }) },
+  { t: 'pres', kind: 'e', focus: 'an càr', enFocus: 'the car', rest: s => ({ gd: `a chunnaic ${s.gd}`, en: `${s.en} saw` }) },
+  { t: 'pres', kind: 'e', focus: 'Calum', enFocus: 'Calum', rest: same('a rinn an cèic', 'made the cake') },
+  { t: 'pres', kind: 'e', focus: 'Seumas', enFocus: 'Seumas', rest: same('a thàinig an-dè', 'came yesterday') },
+  { t: 'pres', kind: 'e', focus: 'leabhar', enFocus: 'a book', rest: s => ({ gd: `a thug ${s.gd} dhi`, en: `${s.en} gave her` }) },
+  { t: 'pres', kind: 'e', focus: 'tidsear', enFocus: 'a teacher', rest: s => ({ gd: `a th’ ann${s.prep}`, en: `${s.en} ${s.be}` }) },
+  { t: 'pres', kind: 'ann', focus: 'an Glaschu', enFocus: 'in Glasgow', rest: s => ({ gd: `a tha ${s.gd} a’ fuireach`, en: `${s.en} live` }) },
+  { t: 'pres', kind: 'ann', focus: 'a-màireach', enFocus: 'tomorrow', rest: s => ({ gd: `a thèid ${s.gd} dhachaigh`, en: `${s.en} will go home` }) },
+  { t: 'pres', kind: 'ann', focus: 'an-dè', enFocus: 'yesterday', rest: same('a thàinig e', 'he came') },
+  { t: 'pres', kind: 'ann', focus: 'à Alba', enFocus: 'from Scotland', rest: s => ({ gd: `a tha ${s.gd}`, en: `${s.en} ${s.be}` }) },
+  { t: 'pres', kind: 'ann', focus: 'leis a’ chàr', enFocus: 'by car', rest: s => ({ gd: `a thàinig ${s.gd}`, en: `${s.en} came` }) },
+  { t: 'pres', kind: 'ann', focus: 'sgìth', enFocus: 'tired', rest: s => ({ gd: `a tha ${s.gd}`, en: `${s.en} ${s.be}` }) },
+  { t: 'pres', kind: 'ann', focus: 'dhachaigh', enFocus: 'home', rest: same('a chaidh i', 'she went') },
+  { t: 'pres', kind: 'ann', focus: 'aig baile', enFocus: 'at home', rest: same('a tha e', 'he is') },
+  { t: 'pres', kind: 'ann', focus: 'air a’ bhòrd', enFocus: 'on the table', rest: same('a tha an leabhar', 'the book is') },
+  { t: 'past', kind: 'e', focus: 'Mòrag', enFocus: 'Mòrag', rest: same('a bh’ ann', '') },
+  { t: 'past', kind: 'e', focus: 'tidsear', enFocus: 'a teacher', rest: s => ({ gd: `a bh’ ann${s.prep}`, en: `${s.en} ${s.was}` }) },
+  { t: 'past', kind: 'ann', focus: 'an Glaschu', enFocus: 'in Glasgow', rest: s => ({ gd: `a bha ${s.gd}`, en: `${s.en} ${s.was}` }) },
+  { t: 'past', kind: 'ann', focus: 'à Alba', enFocus: 'from Scotland', rest: s => ({ gd: `a bha ${s.gd}`, en: `${s.en} ${s.was}` }) },
+  { t: 'past', kind: 'ann', focus: 'sgìth', enFocus: 'tired', rest: s => ({ gd: `a bha ${s.gd}`, en: `${s.en} ${s.was}` }) },
+  { t: 'past', kind: 'ann', focus: 'an-dè', enFocus: 'yesterday', rest: s => ({ gd: `a bha ${s.gd} ann`, en: `${s.en} ${s.was} there` }) },
+];
+const CLEFT_POLS = ['pos', 'neg', 'q', 'nq'];
+function cleftFacts(c) {
+  return CLEFT_ITEMS.filter(it => c.kinds.includes(it.kind) && c.tenses.includes(it.t))
+    .flatMap(item => c.pols.map(pol => ({ game: 'cleft', item, t: item.t, pol })));
+}
+function buildCleft(f) {
+  const { item, t, pol } = f, isQ = pol === 'q' || pol === 'nq', k = item.kind === 'e' ? 0 : 1;
+  const r = item.rest(isQ ? CS[1] : CS[0]);
+  const correct = CLEFT_FORM[t][pol][k], wrongKind = CLEFT_FORM[t][pol][1 - k];
+  // the other two options: another polarity / tense, again one of each kind
+  const combos = [];
+  for (const tt of ['pres', 'past']) for (const pp of CLEFT_POLS) if (!(tt === t && pp === pol)) combos.push([tt, pp]);
+  const near = combos.filter(([tt]) => tt === t), [t2, p2] = sample(Math.random() < 0.75 ? near : combos);
+  const opts = shuffle([correct, wrongKind, CLEFT_FORM[t2][p2][k], CLEFT_FORM[t2][p2][1 - k]]);
+  const gd = `___ ${item.focus}${r.gd ? ' ' + r.gd : ''}${isQ ? '?' : '.'}`;
+  const en = `${CLEFT_LEAD[t][pol]} ${item.enFocus}${r.en ? ' that ' + r.en : ''}${isQ ? '?' : '.'}`;
+  const note = (k === 0 ? '’S e = a noun or pronoun is emphasised (Mòrag, an càr, tidsear)' : '’S ann = a phrase, adverb or adjective is emphasised (an Glaschu, a-màireach, sgìth)')
+    + ' · negative Chan / Cha b’ · question An / Am b’ · negative question Nach';
+  return { fact: f, dir: 'cleft', sentence: true, prompt: gd, sub: S.cleft.showEn ? en : '', correct, opts,
+           explain: `${correct} ${item.focus}${r.gd ? ' ' + r.gd : ''}${isQ ? '?' : '.'}  =  ${en}`, note };
 }
 
 /* ============================ FACTS & QUESTIONS ============================ */
@@ -467,10 +574,14 @@ function verbFacts(c) {
   return ALLV.filter(({ v, e }) => c.sel.includes(v.gd) && c.tenses.includes(e[0]) && (c.dep || e[1] === 'both' || e[1] === 'ind'))
              .map(({ v, e }) => ({ game: 'verb', v, e }));
 }
+const COP_IDS = ['math', 'toil', 'fheàrr', 'ident'];
 function clauseFacts(c) {
-  return VERBS.filter(v => c.sel.includes(v.gd)).flatMap(v => c.tenses.flatMap(t => c.pols.map(pol => ({ game: 'clause', v, t, pol }))));
+  const verbs = VERBS.filter(v => c.sel.includes(v.gd)).flatMap(v => c.tenses.flatMap(t => c.pols.map(pol => ({ game: 'clause', v, t, pol }))));
+  const cops = !c.sel.includes('is') ? [] : c.tenses.filter(t => t === 'pres' || t === 'past')
+    .flatMap(t => c.pols.flatMap(pol => COP_IDS.map(cop => ({ game: 'clause', cop, t, pol }))));
+  return [...verbs, ...cops];
 }
-const factsFor = (game) => game === 'prep' ? prepFacts(S.prep) : game === 'clause' ? clauseFacts(S.clause) : verbFacts(S.verb);
+const factsFor = (game) => game === 'prep' ? prepFacts(S.prep) : game === 'clause' ? clauseFacts(S.clause) : game === 'cleft' ? cleftFacts(S.cleft) : verbFacts(S.verb);
 
 // choose 3 distractors: groups = [[candidates, max], ...], then fallback; all are display strings
 function fill(correct, groups, fallback) {
@@ -484,6 +595,7 @@ function fill(correct, groups, fallback) {
 }
 
 function buildQ(f, dirSetting) {
+  if (f.game === 'cleft') return buildCleft(f);
   if (f.game === 'clause') return buildClause(f, dirSetting);
   const dir = dirSetting === 'mix' ? sample(['g2e', 'e2g']) : dirSetting;
   if (f.game === 'prep') {
@@ -547,8 +659,8 @@ const later = (fn, ms) => { const t = setTimeout(fn, ms); timers.push(t); };
 function render(...nodes) { clearTimers(); document.onkeydown = null; $app.replaceChildren(...nodes.filter(Boolean)); window.scrollTo(0, 0); }
 
 /* ============================ HIGH SCORES (stored in this browser) ============================ */
-const DIR_LABEL = { g2e: 'Gaelic → English', e2g: 'English → Gaelic', mix: 'Mixed', sent: 'Fill the gap', part: 'Joining word', phrase: 'Word + verb form' };
-const GAME_LABEL = { prep: 'Prepositional pronouns', verb: 'Irregular verbs', clause: 'Joining clauses' };
+const DIR_LABEL = { g2e: 'Gaelic → English', e2g: 'English → Gaelic', mix: 'Mixed', sent: 'Fill the gap', part: 'Joining word', phrase: 'Word + verb form', opener: 'Choose the opener' };
+const GAME_LABEL = { prep: 'Prepositional pronouns', verb: 'Irregular verbs', clause: 'Joining clauses', cleft: 'Cleft sentences (’S e / ’S ann)' };
 const lenLabel = l => l === -60 ? '60-second blitz' : l === 0 ? 'every item once' : `${l} questions`;
 const boardKey = (game, dir, len) => `${game}|${dir}|${len}`;
 const totalRounds = () => Object.values(S.scores).reduce((n, l) => n + l.length, 0);
@@ -629,6 +741,10 @@ function home() {
         el('div', { class: 't' }, 'Joining clauses'),
         el('div', { class: 'd' }, 'Reported speech: gu, gun, gum, nach + the right verb form, in every tense.'),
         el('div', { class: 'small' }, bestLine('clause'))),
+      el('button', { class: 'card', onclick: () => setup('cleft') },
+        el('div', { class: 't' }, 'Cleft sentences'),
+        el('div', { class: 'd' }, '’S e or ’S ann? Plus Chan, An, Nach and B’ — pick the right opener for the phrase.'),
+        el('div', { class: 'small' }, bestLine('cleft'))),
       el('button', { class: 'card', onclick: scoresScreen },
         el('div', { class: 't' }, 'High scores'),
         el('div', { class: 'd' }, `Your top 10 for every game, mode and round length. ${totalRounds()} round${totalRounds() === 1 ? '' : 's'} recorded.`)),
@@ -682,14 +798,28 @@ function setup(game) {
       el('label', { class: 'check' }, (() => { const i = el('input', { type: 'checkbox', onchange: e => { c.hint = e.target.checked; save(); } }); i.checked = c.hint; return i; })(),
         'English → Gaelic: show which preposition to use')
     );
+  } else if (game === 'cleft') {
+    items.push(
+      el('p', { class: 'small' }, 'Choose the right opener for the emphasised phrase, e.g. ___ Mòrag a chunnaic mi (’S e) or ___ an Glaschu a tha mi a’ fuireach (’S ann).'),
+      el('h3', {}, 'What is emphasised'),
+      el('div', { class: 'chips' }, [['e', 'noun / pronoun (’S e)'], ['ann', 'phrase, adverb, adjective (’S ann)']].map(([k, n]) => chip(n, '', c.kinds.includes(k), on => { toggle(c.kinds, k, on); refresh(); }))),
+      el('h3', {}, 'Tense of is'),
+      el('div', { class: 'chips' }, [['pres', 'present (’S)'], ['past', 'past (B’)']].map(([k, n]) => chip(n, '', c.tenses.includes(k), on => { toggle(c.tenses, k, on); refresh(); }))),
+      el('h3', {}, 'Sentence type'),
+      el('div', { class: 'chips' }, [['pos', 'statement (’S)'], ['neg', 'negative (Chan)'], ['q', 'question (An)'], ['nq', 'negative question (Nach)']].map(([k, n]) => chip(n, '', c.pols.includes(k), on => { toggle(c.pols, k, on); refresh(); }))),
+      el('label', { class: 'check' }, (() => { const i = el('input', { type: 'checkbox', onchange: e => { c.showEn = e.target.checked; save(); } }); i.checked = c.showEn; return i; })(),
+        'Show the English translation')
+    );
   } else if (game === 'clause') {
     items.push(
       el('p', { class: 'small' }, 'Fill in the word that joins the clauses, e.g. Tha mi ag ràdh ___ deach e dhachaigh. (gun)'),
       el('h3', {}, 'Verbs in the second clause'),
       el('div', { class: 'row' },
-        el('button', { class: 'linkbtn', onclick: () => { c.sel = VERBS.map(v => v.gd); setup(game); } }, 'Select all'),
+        el('button', { class: 'linkbtn', onclick: () => { c.sel = [...VERBS.map(v => v.gd), 'is']; setup(game); } }, 'Select all'),
         el('button', { class: 'linkbtn', onclick: () => { c.sel = []; setup(game); } }, 'Clear')),
-      el('div', { class: 'chips' }, VERBS.map(v => chip(v.gd, `(${v.en})`, c.sel.includes(v.gd), on => { toggle(c.sel, v.gd, on); refresh(); }))),
+      el('div', { class: 'chips' }, [...VERBS.map(v => chip(v.gd, `(${v.en})`, c.sel.includes(v.gd), on => { toggle(c.sel, v.gd, on); refresh(); })),
+        chip('is', '(copula: gur / gum bu / nach)', c.sel.includes('is'), on => { toggle(c.sel, 'is', on); refresh(); })]),
+      el('p', { class: 'small' }, 'The copula only uses the present and past tenses (past covers bu).'),
       el('h3', {}, 'Tenses'),
       el('div', { class: 'chips' }, CLAUSE_TENSES.map(k => chip(TENSES[k], k === 'pres' ? '(gu bheil / nach eil)' : '', c.tenses.includes(k), on => { toggle(c.tenses, k, on); refresh(); }))),
       el('h3', {}, 'Positive / negative'),
@@ -744,7 +874,7 @@ function startRun(game, onlyFacts) {
   else if (onlyFacts) queue = shuffle(onlyFacts);
   else if (!c.len) queue = shuffle(pool).slice(0, 200);
   else { queue = []; while (queue.length < c.len) queue.push(...shuffle(pool)); queue = queue.slice(0, c.len); }
-  const sel = game === 'prep' ? c.sel.join(', ') : `${c.sel.length === VERBS.length ? 'all verbs' : c.sel.join(', ')} · ${c.tenses.map(t => TENSES[t]).join(', ')}`;
+  const sel = game === 'cleft' ? `${c.kinds.join(' + ')} · ${c.tenses.join(' + ')} · ${c.pols.join(' / ')}` : game === 'prep' ? c.sel.join(', ') : `${c.sel.length === VERBS.length ? 'all verbs' : c.sel.join(', ')} · ${c.tenses.map(t => TENSES[t]).join(', ')}`;
   const board = onlyFacts ? null : { game, dir: c.dir, len: c.len };
   run = { board, sel, game, pool, blitz, answered: 0, endAt: blitz ? Date.now() + 60000 : 0, queue, idx: 0, score: 0, streak: 0, bestStreak: 0, right: 0, missed: [], q: null, locked: false };
   if (blitz) {
@@ -761,7 +891,7 @@ function startRun(game, onlyFacts) {
 }
 const stopClock = () => { if (run && run.clock) clearInterval(run.clock); };
 
-const f_audio = (f, q) => f.game === 'clause' ? '' : f.game === 'verb' ? f.e[2] : (q.dir === 'g2e' ? q.prompt : q.correct);
+const f_audio = (f, q) => (f.game === 'clause' || f.game === 'cleft') ? '' : f.game === 'verb' ? f.e[2] : (q.dir === 'g2e' ? q.prompt : q.correct);
 
 function nextQ() {
   if (run.blitz && run.idx >= run.queue.length) run.queue.push(...shuffle(run.pool));
@@ -863,6 +993,8 @@ function results() {
 }
 function factText(f) {
   if (f.game === 'prep') return `${f.p.gd} + ${PRON_GD[f.i]} = ${f.p.forms[f.i]}  (${pLabel(f.p, f.i)})`;
+  if (f.game === 'cleft') return `${CLEFT_FORM[f.t][f.pol][f.item.kind === 'e' ? 0 : 1]} ${f.item.focus}…  (${f.item.kind === 'e' ? '’S e' : '’S ann'} type)`;
+  if (f.game === 'clause' && f.cop) return `${copForm(f.t, f.pol, f.t === 'past' ? 'bu' : 'x')}  (is, ${TENSES[f.t]}, ${f.pol === 'pos' ? 'positive' : 'negative'})`;
   if (f.game === 'clause') return `${subForm(f.v, f.t, f.pol).full}  (${f.v.gd}, ${TENSES[f.t]}, ${f.pol === 'pos' ? 'positive' : 'negative'})`;
   return `${disp(f.e)} = ${vEn(f.v, f.e)}  (${f.v.gd}, ${TENSES[f.e[0]]})`;
 }
@@ -882,7 +1014,13 @@ function reference() {
     el('div', { class: 'tablewrap' }, prepTable),
     el('h2', { style: 'margin-top:24px' }, 'Irregular verbs'),
     el('p', { class: 'small' }, 'Where two forms are shown, the first is the independent (positive) form and the second is the dependent form, shown with the particles that use it (cha / chan, an / am, nach, gun / gum).'),
-    el('div', { class: 'tablewrap' }, verbTable)
+    el('div', { class: 'tablewrap' }, verbTable),
+    el('h2', { style: 'margin-top:24px' }, 'The copula in joined clauses'),
+    el('p', { class: 'small' }, 'bu becomes b’ before a vowel or fh, and lenites the next word: gum bu mhath, gum b’ fheàrr leam, gum b’ e.'),
+    el('div', { class: 'tablewrap' }, el('table', {},
+      el('thead', {}, el('tr', {}, ['', 'positive', 'negative'].map(h => el('th', {}, h)))),
+      el('tbody', {}, [['present', 'gur', 'nach'], ['past / conditional', 'gum bu / gum b’', 'nach bu / nach b’']]
+        .map(r => el('tr', {}, el('td', { class: 'k' }, r[0]), el('td', {}, r[1]), el('td', {}, r[2]))))))
   );
 }
 
